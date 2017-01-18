@@ -1,3 +1,12 @@
+/*
+ * This program is to manipulate the filesystem without the need for running the FUSE-based application. This
+ * is primarily used for debugging or manually inserting data and directory entries inside the filesystem
+ * for testing of the actual program. Additionally, this is used for testing algorithms for re-allocation,
+ * deletion, and movement of files and data.
+ *
+ * Command to run to make test filesystem: dd if=/dev/zero of=filesys bs=1 count=0 seek=4m
+ */
+
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -25,7 +34,7 @@ struct entry {
 static void init_dir(char *filesystem)
 {
 	//char entry[ENTRYSIZE];		// buffer for single entry
-	int count, i, begin, j;
+	int count, i, begin;
 	char filename[16];
 	char start[11];
 	char end[11];
@@ -55,25 +64,25 @@ static void init_dir(char *filesystem)
 			printf("[!] Entry %d location\t10\n", i);
 
 			memcpy(filename, &block[10], 16);
-			filename[16] = '\0';
+			filename[15] = '\0';
 			printf("[+] filename\t%s\n", filename);
 			memcpy(prev->filename, &filename, 16);
 			
 			// copy start location from directory
 			memcpy(start, &block[26], 11);
-			start[11] = '\0';
+			start[10] = '\0';
 			printf("[+] begin\t%s|%d\n", start, atoi(start));
 			prev->start = atoi(start);
 
 			// copy end location from directory
 			memcpy(end, &block[37], 11);
-			end[11] = '\0';
+			end[10] = '\0';
 			printf("[+] end\t\t%s|%d\n", end, atoi(end));
 			prev->end = atoi(end);
 
 			// copy the offset of the last block from mem
 			memcpy(off, &block[48], 3);
-			off[3] = '\0';
+			off[2] = '\0';
 			printf("[+] offset\t%s|%d\n", off, atoi(off));
 			prev->off = atoi(off);
 
@@ -88,23 +97,23 @@ static void init_dir(char *filesystem)
 			
 			// copy filename from dir and into array for struct use
 			memcpy(filename, &block[begin], 16);
-			filename[16] = '\0';
+			filename[15] = '\0';
 			printf("[+] filename\t%s\n", filename);
 			memcpy(tmp->filename, filename, 16);
 
 			// copy start location from directory
 			memcpy(start, &block[begin+16], 11);
-			start[11] = '\0';
+			start[10] = '\0';
 			printf("[+] begin\t%s|%d\n", start, atoi(start));
 
 			// copy end location from directory
 			memcpy(end, &block[begin+27], 11);
-			end[11] = '\0';
+			end[10] = '\0';
 			printf("[+] end\t\t%s|%d\n", end, atoi(end));
 
 			// copy the offset of the last block from mem
 			memcpy(off, &block[begin+38], 3);
-			off[3] = '\0';
+			off[2] = '\0';
 			printf("[+] offset\t%s|%d\n", off, atoi(off));
 
 			prev->next = tmp;
@@ -154,7 +163,6 @@ void create_entry(char *filesystem, char *filename, char *begin, char *end)
 
 	// flushes directory and writes to disk
 	FILE *dir = fopen(filesystem, "w+");
-	printf("Result: %d\n", dir);
 	fseek(dir, 0, SEEK_SET);
 	fwrite(block, sizeof(block), 1, dir);
 	fclose(dir);
@@ -190,7 +198,7 @@ int main(int argc, char *argv[])
 	}
 
 	// indicate selected mode to user
-	//printf("[+] selected mode %d\n[+] Print? %d\n", mode, print);
+	printf("[+] selected mode %d\n[+] Print? %d\n", mode, print);
 	switch(mode) {
 		case WRITE:
 			// stupid thing is broken, had to manually assign filename
