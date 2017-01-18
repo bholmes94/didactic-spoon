@@ -3,6 +3,11 @@
  * is primarily used for debugging or manually inserting data and directory entries inside the filesystem
  * for testing of the actual program. Additionally, this is used for testing algorithms for re-allocation,
  * deletion, and movement of files and data.
+ * Layout:
+ *			- 16 byte name
+ *			- 11 byte start location
+ *			- 11 byte end location
+ *			- 3  byte offset *for remaining space of last block
  *
  * Command to run to make test filesystem: dd if=/dev/zero of=filesys bs=1 count=0 seek=4m
  */
@@ -133,10 +138,12 @@ static void init_dir(char *filesystem)
 void create_entry(char *filesystem, char *filename)
 {
 	int location, i, size, blocks, total_size;
-	char buf[511];	// buffer for finding free space
-	char test[1];
+	size_t bytes;
+	char buf[512];		// buffer for finding free space
+	char start[11];		// start block buffer
+	char end[11];		// end block buffer
+	char off[3];		// offset buffer for last block
 
-	test[0] = 'x';
 
 	location = (ENTRIES * 41) + 10;			// calculates start location in dir
 	FILE *fp = fopen(filename, "r");		// open requested file
@@ -169,12 +176,32 @@ void create_entry(char *filesystem, char *filename)
 		fread(buf, 512, 1, fs);
 
 		if(buf[0] == '\0') {
-			printf("[!] Space found at block\t%d\tsetting to position\t%d\n", i, (BLOCKSIZE * i));	// location is i+1 b/c first block is directory
+			printf("[!] Space found at block\t%d\tstart position\t%d\tend location\t%d\n", i + 1, (BLOCKSIZE * i), ((BLOCKSIZE * i) + size) - 1);	// location is i+1 b/c first block is directory
 			fseek(fs, BLOCKSIZE * i, SEEK_SET);
-			fwrite(test, 1, 1, fs);
+
+			// use existing buffer to write pieces to system
+			while(0 < (bytes = fread(buf, 1, sizeof(buf), fp)))
+				fwrite(buf, 1, bytes, fs);
+
 			break;
 		}
 	}
+
+	/*
+	 * NOTE: From here on out, any -1 is for exact location since the buffers start at 0, not 1. All calculations
+	 * for the directory can just be done in blocks without issue. These start at 1. Block 1 corresponds to locations
+	 * 0-511 (512 bytes) in filesystem. Remember this when reading from file! Offset buf can help.
+	 */
+
+	/* convert int to strings */
+	sprintf(start, "%d", i + 1);
+	sprintf(end, "%d", i + blocks);
+	sprintf(off, "%d", size%BLOCKSIZE);
+
+	/* debugging, print results */
+	printf("[+] start block:\t%d\tend block:\t%d\toffset bytes:\t%d\n", i + 1, i + blocks, size%BLOCKSIZE);
+	printf("[+] exact start:\t%d\texact end:\t%d\n", (i+1-1)*BLOCKSIZE, ((blocks + i) * BLOCKSIZE) - 1);
+
 	/*
 	// writes begin block to directory
 	for(i = 0; i < strlen(begin) + 1; i++) {
