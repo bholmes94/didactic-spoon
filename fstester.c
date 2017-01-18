@@ -130,17 +130,52 @@ static void init_dir(char *filesystem)
 	}
 }
 
-void create_entry(char *filesystem, char *filename, char *begin, char *end)
+void create_entry(char *filesystem, char *filename)
 {
-	int location, i;
+	int location, i, size, blocks, total_size;
+	char buf[511];	// buffer for finding free space
+	char test[1];
 
-	location = (ENTRIES * 41) + 10;
+	test[0] = 'x';
 
+	location = (ENTRIES * 41) + 10;			// calculates start location in dir
+	FILE *fp = fopen(filename, "r");		// open requested file
+	fseek(fp, 0L, SEEK_END);				// calculate size
+	size = ftell(fp);						// get results
+	fseek(fp, 0, SEEK_SET);					// sets to beginning again
+	
+	/* check number of blocks needed */
+	if(size%BLOCKSIZE != 0) blocks = size/BLOCKSIZE + 1;
+	else blocks = size/BLOCKSIZE;
+
+	printf("[!] Size of file is\t%d\tblocks needed\t%d\n", size, blocks);
+
+	
 	// writes filename to directory
 	for(i = 0; i < strlen(filename) + 1; i++) {
 		block[location + i] = filename[i];
 	}
 
+	// finds location for number of calculated blocks
+	FILE *fs = fopen("filesys", "r+");		// open filesys for calculations
+	fseek(fs, 0L, SEEK_END);				// count size of entire system
+	total_size = ftell(fs);					// get result
+	fseek(fs, 512, SEEK_SET);				// make sure reset to beginning
+
+	// print results. Debugging
+	printf("[!] Total blocks in filesystem\t%d\n", total_size/BLOCKSIZE);
+
+	for(i = 1; i < total_size/BLOCKSIZE; i++) {
+		fread(buf, 512, 1, fs);
+
+		if(buf[0] == '\0') {
+			printf("[!] Space found at block\t%d\tsetting to position\t%d\n", i, (BLOCKSIZE * i));	// location is i+1 b/c first block is directory
+			fseek(fs, BLOCKSIZE * i, SEEK_SET);
+			fwrite(test, 1, 1, fs);
+			break;
+		}
+	}
+	/*
 	// writes begin block to directory
 	for(i = 0; i < strlen(begin) + 1; i++) {
 		block[location + 16 + i] = begin[i];
@@ -149,23 +184,23 @@ void create_entry(char *filesystem, char *filename, char *begin, char *end)
 	// writes end block to directory
 	for(i = 0; i < strlen(end) + 1; i++) {
 		block[location + 27 + i] = end[i];
-	}
+	}*/
 
 	// update entry count, write to directory
 	ENTRIES++;
 	block[0] = ENTRIES + '0';
 
 	// debugging print directory
-	for(i = 0; i < 512; i++) {
+	for(i = 0; i < BLOCKSIZE; i++) {
 		if(block[i] == '\0') printf("x ");
 		else printf("%c", block[i]);
 	}
 
 	// flushes directory and writes to disk
-	FILE *dir = fopen(filesystem, "w+");
-	fseek(dir, 0, SEEK_SET);
-	fwrite(block, sizeof(block), 1, dir);
-	fclose(dir);
+	fseek(fs, 0, SEEK_SET);
+	//fwrite(block, sizeof(block), 1, fs);
+	fclose(fs);
+	fclose(fp);
 }
 
 /**
@@ -190,7 +225,7 @@ int main(int argc, char *argv[])
 			case 'd': mode = DELETE; break;
 			case 'p': print = true; break;
 			default:
-				printf("Usage: %s [filesys] [-w] [filename] [begin] [end]\n", argv[0]);
+				printf("Usage: %s [filesys] [-w] [filename]\n", argv[0]);
 				printf("       %s [filesys] [-l] lists all structs\n", argv[0]);
 				printf("       %s [filesys] [-p] prints buffer, no filename needed\n", argv[0]);
 				exit(EXIT_FAILURE);
@@ -202,7 +237,7 @@ int main(int argc, char *argv[])
 	switch(mode) {
 		case WRITE:
 			// stupid thing is broken, had to manually assign filename
-			printf("WRITE file\t%s\n\tbegin:\t%s\n\tend:\t%s\n", argv[3], argv[4], argv[5]); create_entry("filesys", argv[3], argv[4], argv[5]); break;
+			printf("WRITE file\t%s\n\tbegin:\t%s\n\tend:\t%s\n", argv[3], argv[4], argv[5]); create_entry("filesys", argv[3]); break;
 		case LIST:
 			printf("LIST directories in filesystem\n"); break;
 		case DELETE:
