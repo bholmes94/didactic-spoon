@@ -202,16 +202,25 @@ void create_entry(char *filesystem, char *filename)
 	printf("[+] start block:\t%d\tend block:\t%d\toffset bytes:\t%d\n", i + 1, i + blocks, size%BLOCKSIZE);
 	printf("[+] exact start:\t%d\texact end:\t%d\n", (i+1-1)*BLOCKSIZE, ((blocks + i) * BLOCKSIZE) - 1);
 
-	/*
-	// writes begin block to directory
-	for(i = 0; i < strlen(begin) + 1; i++) {
-		block[location + 16 + i] = begin[i];
+	/* 
+	 * NOTE: all write functions are to memory, NOT the drive. there is a 
+	 * separate function to flush the directory to the drive.
+	 */
+	
+	// writes start block to directory
+	for(i = 0; i < strlen(start) + 1; i++) {
+		block[location + 16 + i] = start[i];
 	}
 
 	// writes end block to directory
 	for(i = 0; i < strlen(end) + 1; i++) {
 		block[location + 27 + i] = end[i];
-	}*/
+	}
+
+	// writes offset to directory
+	for(i = 0; i < strlen(off); i++) {
+		block[location + 38 + i] = off[i];
+	}
 
 	// update entry count, write to directory
 	ENTRIES++;
@@ -220,7 +229,7 @@ void create_entry(char *filesystem, char *filename)
 	// debugging print directory
 	for(i = 0; i < BLOCKSIZE; i++) {
 		if(block[i] == '\0') printf("x ");
-		else printf("%c", block[i]);
+		else printf("%c|%d", block[i], i);
 	}
 
 	// flushes directory and writes to disk
