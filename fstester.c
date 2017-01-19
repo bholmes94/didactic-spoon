@@ -135,14 +135,25 @@ static void init_dir(char *filesystem)
 	}
 }
 
+/*
+ * Function called to create a new entry inside of the directory which is already read
+ * into memory and flush it to the drive. Also writes data to specified location. Right
+ * now it is hard coded.
+ * @param filesystem 	- location (file in Unix) to write to
+ * @param filename		- file to write to filesystem
+ *
+ * Note: The buffers for start, end, and off are increased by one to accomodate the null
+ * byte at the end of the string. Otherwise the program breaks. The program still will 
+ * only write 11 bytes for start, end and 3 for the offset.
+ */
 void create_entry(char *filesystem, char *filename)
 {
 	int location, i, size, blocks, total_size;
 	size_t bytes;
 	char buf[512];		// buffer for finding free space
-	char start[11];		// start block buffer
-	char end[11];		// end block buffer
-	char off[3];		// offset buffer for last block
+	char start[12];		// start block buffer
+	char end[12];		// end block buffer
+	char off[4];		// offset buffer for last block
 
 
 	location = (ENTRIES * 41) + 10;			// calculates start location in dir
@@ -182,7 +193,6 @@ void create_entry(char *filesystem, char *filename)
 			// use existing buffer to write pieces to system
 			while(0 < (bytes = fread(buf, 1, sizeof(buf), fp)))
 				fwrite(buf, 1, bytes, fs);
-
 			break;
 		}
 	}
@@ -234,7 +244,7 @@ void create_entry(char *filesystem, char *filename)
 
 	// flushes directory and writes to disk
 	fseek(fs, 0, SEEK_SET);
-	//fwrite(block, sizeof(block), 1, fs);
+	fwrite(block, sizeof(block), 1, fs);
 	fclose(fs);
 	fclose(fp);
 }
