@@ -230,7 +230,7 @@ static int myfs_read(const char *path, char *buf, size_t size, off_t offset,
 	size_t total;			// var to store written byte number
 	char cpy[16];			// buffer for copy of path
 	FILE *fs;				// file pointer to the actual data
-	char data[512];			// buffer of one block to read from file
+	char data[513];			// buffer of one block to read from file
 	struct entry *tmp;		// pointer to head of directory list
 	int i, start, end;		// for loop stuff & location storage
 	
@@ -268,9 +268,11 @@ static int myfs_read(const char *path, char *buf, size_t size, off_t offset,
 			memset(data, 0, sizeof(data));
 			fread(data, 512, 1, fs);
 			//printf("[+] %d bytes read\n", end);
-			memcpy(buf, data + offset, BLOCKSIZE);
-			total = BLOCKSIZE;
+			memcpy(buf, data, 512);
+			data[512] = '\0';
+			total = 512;
 			fclose(fs);
+			printf("\n[!] DATA:\n%s", data);
 		} else {
 			printf("[-] ERROR: file pointer not pointing to a filesystem\n");
 		}
