@@ -44,7 +44,7 @@ static int file_lookup(char *filename, struct stat *stbuf)
 			if(stbuf != NULL) { 
 				stbuf->st_nlink = 1;
 				stbuf->st_mode = S_IFREG | 0444;
-				stbuf->st_size = 2048;
+				stbuf->st_size = tmp->info.st_size;
 			}
 			return 1;
 		}
@@ -151,6 +151,14 @@ static void init_dir(char *filesystem)
 			off[3] = '\0';
 			printf("[+] offset\t%s|%d\n", off, atoi(off));
 
+
+			struct stat st;
+		 	st.st_ino = i+10;
+		 	st.st_mode = S_IFREG | 0444;
+		 	st.st_nlink = 10;
+		 	st.st_size = (((atoi(end) - atoi(start))) * 512) + atoi(off);
+		 	tmp->info = st;
+		 	printf("[+] Size of file:\t%zu | Calculated:\t%zu\n", st.st_size, (((atoi(end) - atoi(start))) * 512) + atoi(off));
 			prev->next = tmp;
 			prev = tmp;
 		}
@@ -181,7 +189,7 @@ static int myfs_getattr(const char *path, struct stat *stbuf)
 		printf("[+] resetting attributes\n");
 		stbuf->st_mode = S_IFREG | 0444;
 		stbuf->st_nlink = 1;
-		stbuf->st_size = HEAD->info.st_size;
+		//stbuf->st_size = HEAD->info.st_size;
 		return 0;
 	} else {
 		printf("[+] Nothing found\n");
@@ -240,9 +248,9 @@ static int myfs_read(const char *path, char *buf, size_t size, off_t offset,
 
 	/* testing finding the file to change */
 	tmp = HEAD;
-	/*for(i = 0; i < ENTRIES; i++) {		// loop through all entries, find matching filename
+	for(i = 0; i < ENTRIES; i++) {		// loop through all entries, find matching filename
 		if(strcmp(cpy, tmp->filename) == 0) printf("[+] File found\n");
-	}*/
+	}
 
 	/* mostly testing stuff here... */
 	printf("[!] READ called\tpath:\t%s\n\t-start: %d\n\t-end: %d\n", path, tmp->start, tmp->end);
