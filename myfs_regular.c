@@ -177,7 +177,7 @@ static int myfs_getattr(const char *path, struct stat *stbuf)
 		stbuf->st_ino = 2;
 		stbuf->st_mode = S_IFDIR | 0755;
 		return 0;
-	} else if(file_lookup(path, stbuf) == 1) {
+	} else if(file_lookup(path, stbuf) == 1) {	//TODO: Breaks looking up some files, fix this!
 		printf("[+] resetting attributes\n");
 		stbuf->st_mode = S_IFREG | 0444;
 		stbuf->st_nlink = 1;
@@ -249,11 +249,14 @@ static int myfs_read(const char *path, char *buf, size_t size, off_t offset,
 	printf("[!] buffer size:\t%d\toffset:\t%d\n", size, offset);
 	if(512 >= size) {
 		fs = fopen("filesys", "r+");
-		printf("[+] next chunk too large. Remaining size of buf:\t%zu\tcur total:\t%zu\tadding:\t%zu\n", size, total, size);
+		//printf("[+] next chunk too large. Remaining size of buf:\t%zu\tcur total:\t%zu\tadding:\t%zu\n", size, total, size);
 		start = ((tmp->start - 1) * BLOCKSIZE) + offset;
+		fseek(fs, start, SEEK_SET);
 		fread(data, size, 1, fs);
-		memcpy(buf, data + offset, size);
+		printf("\n[+] start location:\t%d\n", start);
+		memcpy(buf, data, size);
 		total = size;
+		close(fs);
 	}
 	else {
 		/* for now: open, read x into data buffer, repeat */
@@ -267,12 +270,10 @@ static int myfs_read(const char *path, char *buf, size_t size, off_t offset,
 			fseek(fs, start, SEEK_SET);
 			memset(data, 0, sizeof(data));
 			fread(data, 512, 1, fs);
-			//printf("[+] %d bytes read\n", end);
 			memcpy(buf, data, 512);
 			data[512] = '\0';
 			total = 512;
 			fclose(fs);
-			printf("\n[!] DATA:\n%s", data);
 		} else {
 			printf("[-] ERROR: file pointer not pointing to a filesystem\n");
 		}
