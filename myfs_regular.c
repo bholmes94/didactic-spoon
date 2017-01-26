@@ -140,16 +140,19 @@ static void init_dir(char *filesystem)
 			memcpy(start, &block[begin+16], 11);
 			start[11] = '\0';
 			printf("[+] begin\t%s|%d\n", start, atoi(start));
+			tmp->start = atoi(start);
 
 			// copy end location from directory
 			memcpy(end, &block[begin+27], 11);
 			end[11] = '\0';
 			printf("[+] end\t\t%s|%d\n", end, atoi(end));
+			tmp->end = atoi(end);
 
 			// copy the offset of the last block from mem
 			memcpy(off, &block[begin+38], 3);
 			off[3] = '\0';
 			printf("[+] offset\t%s|%d\n", off, atoi(off));
+			tmp->off = atoi(off);
 
 
 			struct stat st;
@@ -249,7 +252,10 @@ static int myfs_read(const char *path, char *buf, size_t size, off_t offset,
 	/* testing finding the file to change */
 	tmp = HEAD;
 	for(i = 0; i < ENTRIES; i++) {		// loop through all entries, find matching filename
-		if(strcmp(cpy, tmp->filename) == 0) printf("[+] File found\n");
+		if(strcmp(cpy, tmp->filename) == 0) {
+			break;
+		} 
+		else tmp = tmp->next;
 	}
 
 	/* mostly testing stuff here... */
@@ -291,16 +297,21 @@ static int myfs_read(const char *path, char *buf, size_t size, off_t offset,
 	// offset approaches size
 }
 
-static int myfs_write()
+static int myfs_write(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
 {
 	printf("[!] WRITE called\n");
-	return 0;
+	return 1;
 }
 
-static int myfs_create()
+static int myfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 {
 	printf("[!] CREATE called\n");
-	return 0;
+	return 1;
+}
+
+static int myfs_mknod(const char *path, mode_t mode, dev_t dev) {
+	printf("[!] MKNOD called\n");
+	return 1;
 }
 
 /* mapping of FUSE functions to my functions */
@@ -311,6 +322,7 @@ static struct fuse_operations myfs_ops = {
 	.read 		= myfs_read,
 	.write		= myfs_write,
 	.create		= myfs_create,
+	.mknod		= myfs_mknod,
 };
 
 int main(int argc, char *argv[])
