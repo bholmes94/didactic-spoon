@@ -43,7 +43,7 @@ static int file_lookup(char *filename, struct stat *stbuf)
 			// grabs stored attributes
 			if(stbuf != NULL) { 
 				stbuf->st_nlink = 1;
-				stbuf->st_mode = S_IFREG | 0444;
+				stbuf->st_mode = S_IFREG | 0777;
 				stbuf->st_size = tmp->info.st_size;
 			}
 			return 1;
@@ -118,7 +118,7 @@ static void init_dir(char *filesystem)
 
 			struct stat stbuf;
 		 	stbuf.st_ino = i+10;
-		 	stbuf.st_mode = S_IFREG | 0444;
+		 	stbuf.st_mode = S_IFREG | 0777;
 		 	stbuf.st_nlink = 10;
 		 	stbuf.st_size = (((prev->end - prev->start)) * 512) + prev->off;
 		 	prev->info = stbuf;
@@ -157,7 +157,7 @@ static void init_dir(char *filesystem)
 
 			struct stat st;
 		 	st.st_ino = i+10;
-		 	st.st_mode = S_IFREG | 0444;
+		 	st.st_mode = S_IFREG | 0777;
 		 	st.st_nlink = 10;
 		 	st.st_size = (((atoi(end) - atoi(start))) * 512) + atoi(off);
 		 	tmp->info = st;
@@ -188,11 +188,15 @@ static int myfs_getattr(const char *path, struct stat *stbuf)
 		stbuf->st_ino = 2;
 		stbuf->st_mode = S_IFDIR | 0755;
 		return 0;
-	} else if(file_lookup(path, stbuf) == 1) {	//TODO: Breaks looking up some files, fix this!
+	} if(file_lookup(path, stbuf) == 1) {	//TODO: Breaks looking up some files, fix this!
 		printf("[+] resetting attributes\n");
-		stbuf->st_mode = S_IFREG | 0444;
+		stbuf->st_mode = S_IFREG | 0777;
 		stbuf->st_nlink = 1;
 		//stbuf->st_size = HEAD->info.st_size;
+		return 0;
+	} else if(strcmp(path, "/test.txt") == 0) {
+		stbuf->st_mode = S_IFREG | 0777;
+		stbuf->st_size = 0;
 		return 0;
 	} else {
 		printf("[+] Nothing found\n");
@@ -299,19 +303,35 @@ static int myfs_read(const char *path, char *buf, size_t size, off_t offset,
 
 static int myfs_write(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
 {
-	printf("[!] WRITE called\n");
+	printf("[!] WRITE called on path: %s\tsize: %zu\toffset:%zu\n", path, size, offset);
 	return 1;
 }
 
 static int myfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 {
 	printf("[!] CREATE called\n");
-	return 1;
+	return 0;
 }
 
 static int myfs_mknod(const char *path, mode_t mode, dev_t dev) {
 	printf("[!] MKNOD called\n");
-	return 1;
+	return 0;
+}
+
+static int myfs_truncate(const char *path, off_t offset)
+{
+	printf("[!] TRUNCATE called on path:\t%s\toffset:\t%zu\n", path, offset);
+	return 0;
+}
+
+static int myfs_chown()
+{
+
+}
+
+static int myfs_utimens()
+{
+
 }
 
 /* mapping of FUSE functions to my functions */
@@ -323,6 +343,9 @@ static struct fuse_operations myfs_ops = {
 	.write		= myfs_write,
 	.create		= myfs_create,
 	.mknod		= myfs_mknod,
+	.truncate 	= myfs_truncate,
+	.chown 		= myfs_chown,
+	.utimens	= myfs_utimens,
 };
 
 int main(int argc, char *argv[])
