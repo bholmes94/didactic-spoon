@@ -110,16 +110,19 @@ static void init_dir(char *filesystem)
 			memcpy(start, &block[begin+16], 11);
 			start[10] = '\0';
 			printf("[+] begin\t%s|%d\n", start, atoi(start));
+			tmp->start = atoi(start);
 
 			// copy end location from directory
 			memcpy(end, &block[begin+27], 11);
 			end[10] = '\0';
 			printf("[+] end\t\t%s|%d\n", end, atoi(end));
+			tmp->end = atoi(end);
 
 			// copy the offset of the last block from mem
 			memcpy(off, &block[begin+38], 3);
 			off[2] = '\0';
 			printf("[+] offset\t%s|%d\n", off, atoi(off));
+			tmp->off = atoi(end);
 
 			prev->next = tmp;
 			prev = tmp;
