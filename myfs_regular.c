@@ -301,20 +301,28 @@ static int myfs_read(const char *path, char *buf, size_t size, off_t offset,
 	// offset approaches size
 }
 
+/*
+ * For this case, write will assume that items are only being copied into the filesysten and not edited. Therefore,
+ * we can assume that the size is 0 until this is called. In which case, the new filesize will be the size which is
+ * passed into the function as a parameter. 
+ */
 static int myfs_write(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
 {
 	printf("[!] WRITE called on path: %s\tsize: %zu\toffset:%zu\n", path, size, offset);
+	/* 
+	 * TODO:
+	 * Function needs to:
+	 *		1) check if file exists (it should from open())
+	 *		2) update the size within the stat struct
+	 *		3) calculate blocks
+	 *		4) update entry struct with size info
+	 */
 	return 1;
 }
 
 static int myfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 {
 	printf("[!] CREATE called\n");
-	return 0;
-}
-
-static int myfs_mknod(const char *path, mode_t mode, dev_t dev) {
-	printf("[!] MKNOD called\n");
 	return 0;
 }
 
@@ -342,7 +350,6 @@ static struct fuse_operations myfs_ops = {
 	.read 		= myfs_read,
 	.write		= myfs_write,
 	.create		= myfs_create,
-	.mknod		= myfs_mknod,
 	.truncate 	= myfs_truncate,
 	.chown 		= myfs_chown,
 	.utimens	= myfs_utimens,
