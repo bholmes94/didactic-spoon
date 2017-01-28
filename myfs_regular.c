@@ -30,7 +30,10 @@ static int file_lookup(char *filename, struct stat *stbuf)
 	char cpy[16];		// to deal with string copying
 	int i;				// for loop later on
 	tmp = HEAD;			// points tmp to head
-
+	
+	/* VERY IMPORTANT TO CHECK SIZE! */
+	if(strlen(filename) > 16) return 0;
+	
 	strcpy(cpy, filename);
 	memmove(cpy, cpy + 1, strlen(cpy));
 
@@ -176,13 +179,13 @@ static void init_dir(char *filesystem)
 	}
 
 }
-
+// Breaks here:   [!] GETATTR called	path:	/.ql_disablethumbnails
 static int myfs_getattr(const char *path, struct stat *stbuf)
 {
 	memset(stbuf, 0, sizeof(struct stat));
 	printf("[!] GETATTR called\tpath:\t%s\n", path);
 
-	// check if root or not, if not find in directory
+	/* checks if OS requesting root directory info */
 	if(strcmp(path, "/") == 0) {
 		printf("[+] root dir\n");
 		stbuf->st_ino = 2;
@@ -190,13 +193,8 @@ static int myfs_getattr(const char *path, struct stat *stbuf)
 		return 0;
 	} if(file_lookup(path, stbuf) == 1) {	//TODO: Breaks looking up some files, fix this!
 		printf("[+] resetting attributes\n");
-		stbuf->st_mode = S_IFREG | 0777;
+		stbuf->st_mode = S_IFREG | 0777;		// leaving this for now, will get from stbuf in future 
 		stbuf->st_nlink = 1;
-		//stbuf->st_size = HEAD->info.st_size;
-		return 0;
-	} else if(strcmp(path, "/test.txt") == 0) {
-		stbuf->st_mode = S_IFREG | 0777;
-		stbuf->st_size = 0;
 		return 0;
 	} else {
 		printf("[+] Nothing found\n");
