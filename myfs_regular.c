@@ -289,12 +289,11 @@ static int myfs_read(const char *path, char *buf, size_t size, off_t offset,
 			memcpy(buf, data, 512);
 			data[512] = '\0';
 			total = 512;
-			fclose(fs);
 		} else {
 			printf("[-] ERROR: file pointer not pointing to a filesystem\n");
 		}
+		fclose(fs);
 	}
-
 	return total; // Returns number of bytes read, will call again with new buffer if not reached size yet! Uses 8byte buffer by default
 	// offset approaches size
 }
