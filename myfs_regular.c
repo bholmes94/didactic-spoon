@@ -15,6 +15,7 @@ int DATABEGIN = 512;	// beginning of user data at point 512 (513th space in arra
 int ENTRIES = 0;		// number of entries within the directory
 char block[512];		// array to store first block
 struct entry *HEAD;		// head of array for the entries
+FILE* FSPTR;
 
 /* struct to store each entry and info */
 struct entry {
@@ -264,35 +265,35 @@ static int myfs_read(const char *path, char *buf, size_t size, off_t offset,
 	printf("[!] READ called\tpath:\t%s\n\t-start: %d\n\t-end: %d\n", path, tmp->start, tmp->end);
 	printf("[!] buffer size:\t%d\toffset:\t%d\n", size, offset);
 	if(512 >= size) {
-		fs = fopen("filesys", "r+");
+		//fs = fopen("filesys", "r+");
 		//printf("[+] next chunk too large. Remaining size of buf:\t%zu\tcur total:\t%zu\tadding:\t%zu\n", size, total, size);
 		start = ((tmp->start - 1) * BLOCKSIZE) + offset;
-		fseek(fs, start, SEEK_SET);
-		fread(data, size, 1, fs);
+		fseek(FSPTR, start, SEEK_SET);
+		fread(data, size, 1, FSPTR);
 		printf("\n[+] start location:\t%d\n", start);
 		memcpy(buf, data, size);
 		total = size;
-		close(fs);
+		//close(fs);
 	}
 	else {
 		/* for now: open, read x into data buffer, repeat */
-		fs = fopen("filesys", "r+");
+		//fs = fopen("filesys", "r+");
 		/* if fs is open, set to proper location and read */
-		if(fs) {
+		if(FSPTR) {
 			//printf("[+] Read from %d to %d\n", ((tmp->start - 1) * BLOCKSIZE) + offset-512, ((tmp->end - 1) * BLOCKSIZE) + tmp->off);
 			start = ((tmp->start - 1) * BLOCKSIZE) + offset;
 			//end = ((tmp->end - 1) * BLOCKSIZE) + tmp->off;
 			printf("[+] Seek set to\t%d\n", ((tmp->start - 1) * BLOCKSIZE) + offset);
-			fseek(fs, start, SEEK_SET);
+			fseek(FSPTR, start, SEEK_SET);
 			memset(data, 0, sizeof(data));
-			fread(data, 512, 1, fs);
+			fread(data, 512, 1, FSPTR);
 			memcpy(buf, data, 512);
 			data[512] = '\0';
 			total = 512;
 		} else {
 			printf("[-] ERROR: file pointer not pointing to a filesystem\n");
 		}
-		fclose(fs);
+		//fclose(fs);
 	}
 	return total; // Returns number of bytes read, will call again with new buffer if not reached size yet! Uses 8byte buffer by default
 	// offset approaches size
@@ -354,6 +355,7 @@ static struct fuse_operations myfs_ops = {
 
 int main(int argc, char *argv[])
 {
+	FSPTR = fopen("filesys", "r+");
 	init_dir("filesys");
 	return fuse_main(argc, argv, &myfs_ops, NULL);	// FUSE taking over here
 }
