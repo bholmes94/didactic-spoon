@@ -18,7 +18,7 @@
 #include <stdbool.h>
 #include <unistd.h>
 #include <stdlib.h>
-#include <assert.h>
+#include <assert.h> 
 #include <errno.h>
 
 // global variables
@@ -28,6 +28,7 @@ int DATABEGIN = 512;	// beginning of user data at point 512 (513th space in arra
 int ENTRIES = 0;		// number of entries within the directory
 char block[512];		// array to store first block
 struct entry *HEAD;		// head of array for the entries
+FILE *FSPTR;			// global reference to file pointer
 
 struct entry {
 	char filename[16];
@@ -40,10 +41,10 @@ static void init_dir(char *filesystem)
 {
 	//char entry[ENTRYSIZE];		// buffer for single entry
 	int count, i, begin;
-	char filename[16];
+	char filename[17];
 	char start[11];
 	char end[11];
-	char off[3];
+	char off[4];
 	struct entry *prev;
 
 	printf("[!] retreiving directory from %s\n", filesystem);
@@ -69,7 +70,7 @@ static void init_dir(char *filesystem)
 			printf("[!] Entry %d location\t10\n", i);
 
 			memcpy(filename, &block[10], 16);
-			filename[15] = '\0';
+			filename[16] = '\0';
 			printf("[+] filename\t%s\n", filename);
 			memcpy(prev->filename, &filename, 16);
 			
@@ -87,7 +88,7 @@ static void init_dir(char *filesystem)
 
 			// copy the offset of the last block from mem
 			memcpy(off, &block[48], 3);
-			off[2] = '\0';
+			off[3] = '\0';
 			printf("[+] offset\t%s|%d\n", off, atoi(off));
 			prev->off = atoi(off);
 
@@ -152,8 +153,10 @@ static void init_dir(char *filesystem)
 void create_entry(char *filesystem, char *filename)
 {
 	int location, i, size, blocks, total_size;
-	size_t bytes;
+	struct entry *tmp;
+	size_t bytes;		// number of bytes read from file
 	char buf[512];		// buffer for finding free space
+	char wrbuf[512];	// separate buffer for writing to fs
 	char start[12];		// start block buffer
 	char end[12];		// end block buffer
 	char off[4];		// offset buffer for last block
@@ -186,19 +189,45 @@ void create_entry(char *filesystem, char *filename)
 	// print results. Debugging
 	printf("[!] Total blocks in filesystem\t%d\n", total_size/BLOCKSIZE);
 
-	for(i = 1; i < total_size/BLOCKSIZE; i++) {
-		fread(buf, 512, 1, fs);
+	/*
+	 * new idea for finding space. Finds the last item in system and writes 
+	 * to the next availible block after it. This assumes that the filesystem
+	 * remains defragmented. Note that the last block is inclusive. So if 
+	 * the end block is 4701, it uses some or all of 4701 and the write will
+	 * need to start at block 4702.
+	 *
+	 * Below, we check and see if there are any entries on which we can base
+	 * our next files position on. If there is not, we create a 'dummy' entry
+	 * and assign it's end value (the only one used) to the end of the reser-
+	 * ved space. The subsequent calculations will be based on this.
+	 */
 
-		if(buf[0] == '\0') {
-			printf("[!] Space found at block\t%d\tstart position\t%d\tend location\t%d\n", i + 1, (BLOCKSIZE * i), ((BLOCKSIZE * i) + size) - 1);	// location is i+1 b/c first block is directory
-			fseek(fs, BLOCKSIZE * i, SEEK_SET);
-
-			// use existing buffer to write pieces to system
-			while(0 < (bytes = fread(buf, 1, sizeof(buf), fp)))
-				fwrite(buf, 1, bytes, fs);
-			break;
+	tmp = HEAD;
+	if(ENTRIES > 0) {
+		for(i = 0; i < ENTRIES; i++) {
+			if(i == ENTRIES - 1) {
+				printf("[!] %s is the last file in the system. Ends at block %d\n", tmp->filename, tmp->end);
+				break;
+			}
+			tmp = tmp->next;
 		}
+	} else { // creating 'dummy' struct
+		tmp = malloc(sizeof(struct entry));
+		tmp->end = 1;
 	}
+
+	// calculate start locations in bytes
+	location = 10 + (ENTRIES * 41);
+	printf("[+] start write at block %d and location %d\n[+] size of file (in blocks): %d\n"
+						,tmp->end+1, (tmp->end * BLOCKSIZE) - 1, blocks); // -1 b/c pointer starts at 0
+	printf("[+] directory write location %d\n[+] filesystem write start location %d\n", location, tmp->end * BLOCKSIZE);
+
+
+	fseek(fs, tmp->end * BLOCKSIZE, SEEK_SET);
+
+	// use existing buffer to write pieces to system
+	while(0 < (bytes = fread(wrbuf, 1, sizeof(wrbuf), fp)))
+		fwrite(wrbuf, 1, bytes, fs);
 
 	/*
 	 * NOTE: From here on out, any -1 is for exact location since the buffers start at 0, not 1. All calculations
@@ -206,14 +235,12 @@ void create_entry(char *filesystem, char *filename)
 	 * 0-511 (512 bytes) in filesystem. Remember this when reading from file! Offset buf can help.
 	 */
 
-	/* convert int to strings */
-	sprintf(start, "%d", i + 1);
-	sprintf(end, "%d", i + blocks);
-	sprintf(off, "%d", size%BLOCKSIZE);
 
-	/* debugging, print results */
-	printf("[+] start block:\t%d\tend block:\t%d\toffset bytes:\t%d\n", i + 1, i + blocks, size%BLOCKSIZE);
-	printf("[+] exact start:\t%d\texact end:\t%d\n", (i+1-1)*BLOCKSIZE, ((blocks + i) * BLOCKSIZE) - 1);
+	/* convert int to strings */
+	sprintf(start, "%d", tmp->end+1);
+	sprintf(end, "%d", (tmp->end + 1) + (blocks - 1));
+	sprintf(off, "%d", size%BLOCKSIZE);				/* offset is just the remainder of the size/512 */
+
 
 	/* 
 	 * NOTE: all write functions are to memory, NOT the drive. there is a 
@@ -240,14 +267,13 @@ void create_entry(char *filesystem, char *filename)
 	block[0] = ENTRIES + '0';
 
 	// debugging print directory
-	for(i = 0; i < BLOCKSIZE; i++) {
-		if(block[i] == '\0') printf("x ");
-		else printf("%c|%d", block[i], i);
+	for(i = 10; i < BLOCKSIZE; i++) {
+		printf("%c ", block[i]);
 	}
 
 	// flushes directory and writes to disk
 	fseek(fs, 0, SEEK_SET);
-	fwrite(block, sizeof(block), 1, fs);
+	fwrite(block, sizeof(block), 1, fs);	/* rewrites the directory block */
 	fclose(fs);
 	fclose(fp);
 }
@@ -266,6 +292,7 @@ int main(int argc, char *argv[])
 	enum { WRITE, LIST, DELETE } mode = -1;
 
 	init_dir("filesys");		// hard coded for testing purposes
+	FSPTR = fopen("filesys", "r+");
 
 	while ((opt = getopt(argc, argv, "wldp")) != -1) {
 		switch(opt) {
