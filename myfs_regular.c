@@ -15,6 +15,7 @@ int DATABEGIN = 512;	// beginning of user data at point 512 (513th space in arra
 int ENTRIES = 0;		// number of entries within the directory
 char block[512];		// array to store first block
 struct entry *HEAD;		// head of array for the entries
+struct entry *ENT; 		// stores location of entry being worked on
 FILE* FSPTR;
 
 /* struct to store each entry and info */
@@ -93,6 +94,7 @@ void create_entry(char *filename, int filesize)
 				new = malloc(sizeof(struct entry));
 				memcpy(new->filename, filename, 16);
 				tmp->next = new;
+				new->info.st_size = size;
 				break;
 			}
 			tmp = tmp->next;
@@ -129,6 +131,7 @@ void create_entry(char *filename, int filesize)
 	sprintf(start, "%d", tmp->end+1);
 	sprintf(end, "%d", (tmp->end + 1) + (blocks - 1));
 	sprintf(off, "%d", size%BLOCKSIZE);				/* offset is just the remainder of the size/512 */
+	ENT = new;	/* store for future reference */
 
 
 	/* 
@@ -166,8 +169,8 @@ void create_entry(char *filename, int filesize)
 		tmp=tmp->next;
 	}
 	// flushes directory and writes to disk
-	//fseek(fs, 0, SEEK_SET);
-	//fwrite(block, sizeof(block), 1, fs);	/* rewrites the directory block */
+	//seek(FSPTR, 0, SEEK_SET);
+	//fwrite(block, sizeof(block), 1, FSPTR);	/* rewrites the directory block */
 }
 
 static int file_lookup(char *filename, struct stat *stbuf)
@@ -467,7 +470,10 @@ static int myfs_read(const char *path, char *buf, size_t size, off_t offset,
 static int myfs_write(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
 {
 	char cpy[16];
+	struct entry *tmp;
+	int i;
 	printf("[!] WRITE called on path: %s\tsize: %zu\toffset:%zu\n", path, size, offset);
+	tmp = HEAD;
 	/* 
 	 * TODO:
 	 * Function needs to:
@@ -481,12 +487,40 @@ static int myfs_write(const char *path, char *buf, size_t size, off_t offset, st
 		strcpy(cpy, path);
 		memmove(cpy, cpy + 1, strlen(cpy));
 		create_entry(cpy, size);
-		printf("CONTENTS:\n%s\n", buf);
+		printf("New Created! Size: %lld\toffset: %lld\n", size, offset);
+		/* going to want to remove this/ find alternative. Inefficient! */
+		for(i = 0; i < ENTRIES; i++) {
+			if(strcmp(cpy, tmp->filename) == 0) {
+				printf("[+] %d added. New size %d\n", size, tmp->info.st_size);
+				int start = (tmp->start * BLOCKSIZE) - 512;
+				printf("[+] Write at location %d beginning at %d\n", start + offset, start);
+				fseek(FSPTR, start+offset, SEEK_SET);
+				fwrite(buf, 1, size, FSPTR);
+			}
+			tmp = tmp->next;
+		}
 	} else {
-		printf("CONTENTS:\n%s\n", buf);
+		/* going to want to remove this/ find alternative. Inefficient! */
+		for(i = 0; i < ENTRIES; i++) {
+			strcpy(cpy, path);
+			memmove(cpy, cpy + 1, strlen(cpy));
+			printf("[+] Looking for entries matching %s\n", cpy);
+			if(strcmp(cpy, tmp->filename) == 0) {
+				tmp->info.st_size += size;
+				printf("[+] %d added. New size %d\n", size, tmp->info.st_size);
+				int start = (tmp->start * BLOCKSIZE) - 512;
+				printf("[+] Write at location %d beginning at %d\n", start + offset, start);
+				fseek(FSPTR, start+offset, SEEK_SET);
+				fwrite(buf, 1, sizeof(buf), FSPTR);
+			}
+			tmp = tmp->next;
+		}
 	}
 
-	return 1;
+	printf("[-] Need to update sizes for %s\n", ENT->filename);
+	printf("\t-start %d\n\t-end %d\n", ENT->start, ENT->end);
+
+	return size;
 }
 
 static int myfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
