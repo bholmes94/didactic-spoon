@@ -15,6 +15,8 @@ int DATABEGIN = 512;	// beginning of user data at point 512 (513th space in arra
 int ENTRIES = 0;		// number of entries within the directory
 char block[512];		// array to store first block
 struct entry *HEAD;		// head of array for the entries
+struct entry *ENT; 		// stores location of entry being worked on
+FILE* FSPTR;
 
 /* struct to store each entry and info */
 struct entry {
@@ -24,13 +26,163 @@ struct entry {
 	struct entry *next;
 };
 
+/*
+ * Function called to create a new entry inside of the directory which is already read
+ * into memory and flush it to the drive. Also writes data to specified location. Right
+ * now it is hard coded.
+ * @param filesystem 	- location (file in Unix) to write to
+ * @param filename		- file to write to filesystem
+ *
+ * Note: The buffers for start, end, and off are increased by one to accomodate the null
+ * byte at the end of the string. Otherwise the program breaks. The program still will 
+ * only write 11 bytes for start, end and 3 for the offset.
+ */
+void create_entry(char *filename, int filesize)
+{
+	int location, i, size, blocks, total_size;
+	struct entry *tmp;
+	struct entry *new;
+	size_t bytes;		// number of bytes read from file
+	char buf[512];		// buffer for finding free space
+	char wrbuf[512];	// separate buffer for writing to fs
+	char start[12];		// start block buffer
+	char end[12];		// end block buffer
+	char off[4];		// offset buffer for last block
+
+
+	size = filesize;
+	location = (ENTRIES * 41) + 10;			// calculates start location in dir
+	
+	/* check number of blocks needed */
+	if(size%BLOCKSIZE != 0) blocks = size/BLOCKSIZE + 1;
+	else blocks = size/BLOCKSIZE;
+
+	printf("[!] Size of file is\t%d\tblocks needed\t%d\n", size, blocks);
+
+	
+	// writes filename to directory
+	for(i = 0; i < strlen(filename) + 1; i++) {
+		block[location + i] = filename[i];
+	}
+
+	// finds location for number of calculated blocks
+	fseek(FSPTR, 0L, SEEK_END);
+	total_size = ftell(FSPTR);					// get result
+	fseek(FSPTR, 512, SEEK_SET);				// make sure reset to beginning
+
+	// print results. Debugging
+	printf("[!] Total blocks in filesystem\t%d\n", total_size/BLOCKSIZE);
+
+	/*
+	 * new idea for finding space. Finds the last item in system and writes 
+	 * to the next availible block after it. This assumes that the filesystem
+	 * remains defragmented. Note that the last block is inclusive. So if 
+	 * the end block is 4701, it uses some or all of 4701 and the write will
+	 * need to start at block 4702.
+	 *
+	 * Below, we check and see if there are any entries on which we can base
+	 * our next files position on. If there is not, we create a 'dummy' entry
+	 * and assign it's end value (the only one used) to the end of the reser-
+	 * ved space. The subsequent calculations will be based on this.
+	 */
+
+	tmp = HEAD;
+	if(ENTRIES > 0) {
+		for(i = 0; i < ENTRIES; i++) {
+			if(i == ENTRIES - 1) {
+				printf("[!] %s is the last file in the system. Ends at block %d\n", tmp->filename, tmp->end);
+				new = malloc(sizeof(struct entry));
+				memcpy(new->filename, filename, 16);
+				tmp->next = new;
+				new->info.st_size = size;
+				break;
+			}
+			tmp = tmp->next;
+		}
+	} else { // creating 'dummy' struct
+		tmp = malloc(sizeof(struct entry));
+		tmp->end = 1;
+	}
+
+	// calculate start locations in bytes
+	location = 10 + (ENTRIES * 41);
+	printf("[+] start write at block %d and location %d\n[+] size of file (in blocks): %d\n"
+						,tmp->end+1, (tmp->end * BLOCKSIZE) - 1, blocks); // -1 b/c pointer starts at 0
+	printf("[+] directory write location %d\n[+] filesystem write start location %d\n", location, tmp->end * BLOCKSIZE);
+
+
+	fseek(FSPTR, tmp->end * BLOCKSIZE, SEEK_SET);
+
+	/*// use existing buffer to write pieces to system
+	while(0 < (bytes = fread(wrbuf, 1, sizeof(wrbuf), fp)))
+		fwrite(wrbuf, 1, bytes, fs);*/
+
+	/*
+	 * NOTE: From here on out, any -1 is for exact location since the buffers start at 0, not 1. All calculations
+	 * for the directory can just be done in blocks without issue. These start at 1. Block 1 corresponds to locations
+	 * 0-511 (512 bytes) in filesystem. Remember this when reading from file! Offset buf can help.
+	 */
+
+
+	/* convert int to strings and assign values to new entry*/
+	new->start = tmp->end+1;
+	new->end = (tmp->end + 1) + (blocks - 1);
+	new->off = size%BLOCKSIZE;
+	sprintf(start, "%d", tmp->end+1);
+	sprintf(end, "%d", (tmp->end + 1) + (blocks - 1));
+	sprintf(off, "%d", size%BLOCKSIZE);				/* offset is just the remainder of the size/512 */
+	ENT = new;	/* store for future reference */
+
+
+	/* 
+	 * NOTE: all write functions are to memory, NOT the drive. there is a 
+	 * separate function to flush the directory to the drive.
+	 */
+	
+	// writes start block to directory
+	for(i = 0; i < strlen(start) + 1; i++) {
+		block[location + 16 + i] = start[i];
+	}
+
+	// writes end block to directory
+	for(i = 0; i < strlen(end) + 1; i++) {
+		block[location + 27 + i] = end[i];
+	}
+
+	// writes offset to directory
+	for(i = 0; i < strlen(off); i++) {
+		block[location + 38 + i] = off[i];
+	}
+
+	// update entry count, write to directory
+	ENTRIES++;
+	block[0] = ENTRIES + '0';
+
+	// debugging print directory
+	for(i = 10; i < BLOCKSIZE; i++) {
+		printf("%c ", block[i]);
+	}
+
+	tmp = HEAD;
+	for(i=0;i < ENTRIES; i++) {
+		printf("- %s\n", tmp->filename);
+		tmp=tmp->next;
+	}
+	// flushes directory and writes to disk
+	//seek(FSPTR, 0, SEEK_SET);
+	//fwrite(block, sizeof(block), 1, FSPTR);	/* rewrites the directory block */
+}
+
 static int file_lookup(char *filename, struct stat *stbuf)
 {
 	struct entry *tmp;	// pointer to struct for searching
 	char cpy[16];		// to deal with string copying
 	int i;				// for loop later on
 	tmp = HEAD;			// points tmp to head
-
+	
+	/* VERY IMPORTANT TO CHECK SIZE! */
+	if(strlen(filename) > 16) return 0;
+	
 	strcpy(cpy, filename);
 	memmove(cpy, cpy + 1, strlen(cpy));
 
@@ -43,7 +195,7 @@ static int file_lookup(char *filename, struct stat *stbuf)
 			// grabs stored attributes
 			if(stbuf != NULL) { 
 				stbuf->st_nlink = 1;
-				stbuf->st_mode = S_IFREG | 0444;
+				stbuf->st_mode = S_IFREG | 0777;
 				stbuf->st_size = tmp->info.st_size;
 			}
 			return 1;
@@ -118,7 +270,7 @@ static void init_dir(char *filesystem)
 
 			struct stat stbuf;
 		 	stbuf.st_ino = i+10;
-		 	stbuf.st_mode = S_IFREG | 0444;
+		 	stbuf.st_mode = S_IFREG | 0777;
 		 	stbuf.st_nlink = 10;
 		 	stbuf.st_size = (((prev->end - prev->start)) * 512) + prev->off;
 		 	prev->info = stbuf;
@@ -140,21 +292,24 @@ static void init_dir(char *filesystem)
 			memcpy(start, &block[begin+16], 11);
 			start[11] = '\0';
 			printf("[+] begin\t%s|%d\n", start, atoi(start));
+			tmp->start = atoi(start);
 
 			// copy end location from directory
 			memcpy(end, &block[begin+27], 11);
 			end[11] = '\0';
 			printf("[+] end\t\t%s|%d\n", end, atoi(end));
+			tmp->end = atoi(end);
 
 			// copy the offset of the last block from mem
 			memcpy(off, &block[begin+38], 3);
 			off[3] = '\0';
 			printf("[+] offset\t%s|%d\n", off, atoi(off));
+			tmp->off = atoi(off);
 
 
 			struct stat st;
 		 	st.st_ino = i+10;
-		 	st.st_mode = S_IFREG | 0444;
+		 	st.st_mode = S_IFREG | 0777;
 		 	st.st_nlink = 10;
 		 	st.st_size = (((atoi(end) - atoi(start))) * 512) + atoi(off);
 		 	tmp->info = st;
@@ -174,25 +329,43 @@ static void init_dir(char *filesystem)
 
 }
 
+/**
+ * Implemented function from fuse.h header file. Called when the OS needs to know information
+ * (attributes) regarding a file or directory. The file path is passed through the path var 
+ * while the pointer to the stat struct (a UNIX standard struct) is passed in the stbuf var.
+ * Right now the system only accepts files and not directories, so if the path consists of 
+ * the root dir "/" it returns those attributes to the stat. Otherwise it checks if the file
+ * requested is in the filesystem. Finally, if it is not one of the hidden file containing a 
+ * '.' at the beginning, it can be considered a file to create and is given the proper attrib.
+ *
+ * @param path 		- path to the file
+ * @param stbuf		- pointer to the stat struct
+ */
 static int myfs_getattr(const char *path, struct stat *stbuf)
 {
+	char cpy[16]; 			// buffer for removing first char 
 	memset(stbuf, 0, sizeof(struct stat));
-	printf("[!] GETATTR called\tpath:\t%s\n", path);
+	printf("[!] GETATTR called\tpath: %s\tname length: %d\n", path, strlen(path));
 
-	// check if root or not, if not find in directory
+	/* can do this neater in future... stops from breaking */
+	if(strlen(path) > 15) return -ENOENT;
+	/* checks if OS requesting root directory info */
 	if(strcmp(path, "/") == 0) {
 		printf("[+] root dir\n");
 		stbuf->st_ino = 2;
 		stbuf->st_mode = S_IFDIR | 0755;
 		return 0;
-	} else if(file_lookup(path, stbuf) == 1) {	//TODO: Breaks looking up some files, fix this!
+	} if(file_lookup(path, stbuf) == 1) {	//TODO: Breaks looking up some files, fix this!
 		printf("[+] resetting attributes\n");
-		stbuf->st_mode = S_IFREG | 0444;
+		stbuf->st_mode = S_IFREG | 0777;		// leaving this for now, will get from stbuf in future 
 		stbuf->st_nlink = 1;
-		//stbuf->st_size = HEAD->info.st_size;
 		return 0;
-	} else {
-		printf("[+] Nothing found\n");
+	} /*else if(path[1] != '.') {
+		printf("[+] Potential new file path:\t%s\n", path);
+		stbuf->st_mode = S_IFREG | 0777;
+		return 0;
+	} */else {
+		printf("[+] Nothing found. Second char: %c\n", path[1]); // debugging to ensure we can ignore paths with a '.'
 		return -ENOENT;
 	}
 }
@@ -238,9 +411,10 @@ static int myfs_read(const char *path, char *buf, size_t size, off_t offset,
 	size_t total;			// var to store written byte number
 	char cpy[16];			// buffer for copy of path
 	FILE *fs;				// file pointer to the actual data
-	char data[513];			// buffer of one block to read from file
+	char data[131072];		// buffer to read from file
 	struct entry *tmp;		// pointer to head of directory list
-	int i, start, end;		// for loop stuff & location storage
+	int i, end;				// for loop stuff & location storage
+	double start, rsize;
 	
 	/* copy string & get rid of '/' */
 	strcpy(cpy, path);
@@ -249,57 +423,118 @@ static int myfs_read(const char *path, char *buf, size_t size, off_t offset,
 	/* testing finding the file to change */
 	tmp = HEAD;
 	for(i = 0; i < ENTRIES; i++) {		// loop through all entries, find matching filename
-		if(strcmp(cpy, tmp->filename) == 0) printf("[+] File found\n");
+		if(strcmp(cpy, tmp->filename) == 0) {
+			break;
+		} 
+		else tmp = tmp->next;
 	}
 
 	/* mostly testing stuff here... */
 	printf("[!] READ called\tpath:\t%s\n\t-start: %d\n\t-end: %d\n", path, tmp->start, tmp->end);
-	printf("[!] buffer size:\t%d\toffset:\t%d\n", size, offset);
-	if(512 >= size) {
-		fs = fopen("filesys", "r+");
-		//printf("[+] next chunk too large. Remaining size of buf:\t%zu\tcur total:\t%zu\tadding:\t%zu\n", size, total, size);
+	if(tmp->info.st_size - offset > size) {
 		start = ((tmp->start - 1) * BLOCKSIZE) + offset;
-		fseek(fs, start, SEEK_SET);
-		fread(data, size, 1, fs);
-		printf("\n[+] start location:\t%d\n", start);
+		fseek(FSPTR, start, SEEK_SET);
+		fread(data, size, 1, FSPTR);
 		memcpy(buf, data, size);
 		total = size;
-		close(fs);
+	} else { // We can fill buffer now
+		printf("[!] filesize smaller than buffer\n");
+		start = ((tmp->start - 1) * BLOCKSIZE) + offset;
+		/* 
+		 * subtract read from total size for amount to read,
+		 * read that amount into the new large buffer and then
+		 * write it to the FUSE buffer.
+		 */
+		rsize = tmp->info.st_size - offset;
+		fseek(FSPTR, start, SEEK_SET);
+		fread(data, rsize, 1, FSPTR);
+		memcpy(buf, data, rsize);
+		total = rsize;
 	}
-	else {
-		/* for now: open, read x into data buffer, repeat */
-		fs = fopen("filesys", "r+");
-		/* if fs is open, set to proper location and read */
-		if(fs) {
-			//printf("[+] Read from %d to %d\n", ((tmp->start - 1) * BLOCKSIZE) + offset-512, ((tmp->end - 1) * BLOCKSIZE) + tmp->off);
-			start = ((tmp->start - 1) * BLOCKSIZE) + offset;
-			//end = ((tmp->end - 1) * BLOCKSIZE) + tmp->off;
-			printf("[+] Seek set to\t%d\n", ((tmp->start - 1) * BLOCKSIZE) + offset);
-			fseek(fs, start, SEEK_SET);
-			memset(data, 0, sizeof(data));
-			fread(data, 512, 1, fs);
-			memcpy(buf, data, 512);
-			data[512] = '\0';
-			total = 512;
-			fclose(fs);
-		} else {
-			printf("[-] ERROR: file pointer not pointing to a filesystem\n");
-		}
-	}
-
 	return total; // Returns number of bytes read, will call again with new buffer if not reached size yet! Uses 8byte buffer by default
 	// offset approaches size
 }
 
-static int myfs_write()
+/*
+ * For this case, write will assume that items are only being copied into the filesysten and not edited. Therefore,
+ * we can assume that the size is 0 until this is called. In which case, the new filesize will be the size which is
+ * passed into the function as a parameter. 
+ */
+static int myfs_write(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
 {
-	printf("[!] WRITE called\n");
+	char cpy[16];
+	struct entry *tmp;
+	int i;
+	printf("[!] WRITE called on path: %s\tsize: %zu\toffset:%zu\n", path, size, offset);
+	tmp = HEAD;
+	/* 
+	 * TODO:
+	 * Function needs to:
+	 *		1) check if file exists (it should from open())
+	 *		2) update the size within the stat struct
+	 *		3) calculate blocks
+	 *		4) update entry struct with size info
+	 */
+	
+	if(file_lookup(path, NULL) == 0) {
+		strcpy(cpy, path);
+		memmove(cpy, cpy + 1, strlen(cpy));
+		create_entry(cpy, size);
+		printf("New Created! Size: %lld\toffset: %lld\n", size, offset);
+		/* going to want to remove this/ find alternative. Inefficient! */
+		for(i = 0; i < ENTRIES; i++) {
+			if(strcmp(cpy, tmp->filename) == 0) {
+				printf("[+] %d added. New size %d\n", size, tmp->info.st_size);
+				int start = (tmp->start * BLOCKSIZE) - 512;
+				printf("[+] Write at location %d beginning at %d\n", start + offset, start);
+				fseek(FSPTR, start+offset, SEEK_SET);
+				fwrite(buf, 1, size, FSPTR);
+			}
+			tmp = tmp->next;
+		}
+	} else {
+		/* going to want to remove this/ find alternative. Inefficient! */
+		for(i = 0; i < ENTRIES; i++) {
+			strcpy(cpy, path);
+			memmove(cpy, cpy + 1, strlen(cpy));
+			printf("[+] Looking for entries matching %s\n", cpy);
+			if(strcmp(cpy, tmp->filename) == 0) {
+				tmp->info.st_size += size;
+				printf("[+] %d added. New size %d\n", size, tmp->info.st_size);
+				int start = (tmp->start * BLOCKSIZE) - 512;
+				printf("[+] Write at location %d beginning at %d\n", start + offset, start);
+				fseek(FSPTR, start+offset, SEEK_SET);
+				fwrite(buf, 1, sizeof(buf), FSPTR);
+			}
+			tmp = tmp->next;
+		}
+	}
+
+	printf("[-] Need to update sizes for %s\n", ENT->filename);
+	printf("\t-start %d\n\t-end %d\n", ENT->start, ENT->end);
+
+	return size;
+}
+
+static int myfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
+{
+	printf("[!] CREATE called\n");
 	return 0;
 }
 
-static int myfs_create()
+static int myfs_truncate(const char *path, off_t offset)
 {
-	printf("[!] CREATE called\n");
+	printf("[!] TRUNCATE called on path:\t%s\toffset:\t%zu\n", path, offset);
+	return 0;
+}
+
+static int myfs_chown()
+{
+	return 0;
+}
+
+static int myfs_utimens()
+{
 	return 0;
 }
 
@@ -311,10 +546,14 @@ static struct fuse_operations myfs_ops = {
 	.read 		= myfs_read,
 	.write		= myfs_write,
 	.create		= myfs_create,
+	.truncate 	= myfs_truncate,
+	.chown 		= myfs_chown,
+	.utimens	= myfs_utimens,
 };
 
 int main(int argc, char *argv[])
 {
+	FSPTR = fopen("filesys", "r+");
 	init_dir("filesys");
 	return fuse_main(argc, argv, &myfs_ops, NULL);	// FUSE taking over here
 }
