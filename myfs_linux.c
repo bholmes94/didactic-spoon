@@ -110,12 +110,8 @@ void create_entry(char *filename, int filesize)
 						,tmp->end+1, (tmp->end * BLOCKSIZE) - 1, blocks); // -1 b/c pointer starts at 0
 	printf("[+] directory write location %d\n[+] filesystem write start location %d\n", location, tmp->end * BLOCKSIZE);
 
-
 	fseek(FSPTR, tmp->end * BLOCKSIZE, SEEK_SET);
 
-	/*// use existing buffer to write pieces to system
-	while(0 < (bytes = fread(wrbuf, 1, sizeof(wrbuf), fp)))
-		fwrite(wrbuf, 1, bytes, fs);*/
 
 	/*
 	 * NOTE: From here on out, any -1 is for exact location since the buffers start at 0, not 1. All calculations
@@ -355,16 +351,19 @@ static int myfs_getattr(const char *path, struct stat *stbuf)
 		stbuf->st_ino = 2;
 		stbuf->st_mode = S_IFDIR | 0755;
 		return 0;
+	} if(strcmp(path, "/autorun.inf") == 0|| strcmp(path, "/AACS") == 0|| strcmp(path, "/BDSVM") == 0 || strcmp(path, "/BDMV") == 0) {
+		printf("WHY?!?!?!?!\n");
+		return -ENOENT;
 	} if(file_lookup(path, stbuf) == 1) {	//TODO: Breaks looking up some files, fix this!
 		printf("[+] resetting attributes\n");
 		stbuf->st_mode = S_IFREG | 0777;		// leaving this for now, will get from stbuf in future 
 		stbuf->st_nlink = 1;
 		return 0;
-	} /*else if(path[1] != '.') {
+	} else if(path[1] != '.') {
 		printf("[+] Potential new file path:\t%s\n", path);
 		stbuf->st_mode = S_IFREG | 0777;
 		return 0;
-	} */else {
+	} else {
 		printf("[+] Nothing found. Second char: %c\n", path[1]); // debugging to ensure we can ignore paths with a '.'
 		return -ENOENT;
 	}
