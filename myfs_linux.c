@@ -165,8 +165,43 @@ void create_entry(char *filename, int filesize)
 		tmp=tmp->next;
 	}
 	// flushes directory and writes to disk
-	//seek(FSPTR, 0, SEEK_SET);
-	//fwrite(block, sizeof(block), 1, FSPTR);	/* rewrites the directory block */
+	fseek(FSPTR, 0, SEEK_SET);
+	fwrite(block, sizeof(block), 1, FSPTR);	/* rewrites the directory block */
+}
+
+/**
+ * Function takes a pointer to the struct containing the updated file info. It
+ * then takes them, converts them to a string, and prints them to the directory
+ * similar to the way create_entry does it.
+ *
+ * @param struct entry *tmp		-	pointer to the directory entry
+ * @param int Number 			-	position in array [for calculations]
+ */
+static void update_dir(struct entry *tmp, int index)
+{
+	char end[11];
+	char off[3];
+	int location, i;
+
+	printf("[+] update dir of %s. Number %d\n", tmp->filename, index);
+	sprintf(end, "%d", tmp->end);
+	sprintf(off, "%d", tmp->off);
+
+	location = (index * 41) + 10;
+
+	// writes end block to directory
+	for(i = 0; i < strlen(end) + 1; i++) {
+		block[location + 27 + i] = end[i];
+	}
+
+	// writes offset to directory
+	for(i = 0; i < strlen(off); i++) {
+		block[location + 38 + i] = off[i];
+	}
+	
+	/* seek to beginning, write updated dir */
+	fseek(FSPTR, 0, SEEK_SET);
+	fwrite(block, sizeof(block), 1, FSPTR);
 }
 
 static int file_lookup(char *filename, struct stat *stbuf)
@@ -463,7 +498,7 @@ static int myfs_write(const char *path, char *buf, size_t size, off_t offset, st
 {
 	char cpy[16];
 	struct entry *tmp;
-	int i;
+	int i, addblock;
 	printf("[!] WRITE called on path: %s\tsize: %zu\toffset:%zu\n", path, size, offset);
 	tmp = HEAD;
 	/* 
@@ -497,13 +532,28 @@ static int myfs_write(const char *path, char *buf, size_t size, off_t offset, st
 			strcpy(cpy, path);
 			memmove(cpy, cpy + 1, strlen(cpy));
 			printf("[+] Looking for entries matching %s\n", cpy);
+			/*IMPORTANT!: This needs to update the blocks used by the file*/
 			if(strcmp(cpy, tmp->filename) == 0) {
 				tmp->info.st_size += size;
 				printf("[+] %d added. New size %d\n", size, tmp->info.st_size);
+				/* check if we need another block added for offset */
+				addblock = size/BLOCKSIZE;
+				if(size % BLOCKSIZE > 0){ 
+					addblock++;
+					tmp->off = size%BLOCKSIZE;
+				}
+				tmp->end += addblock;
+				printf("[+] need to add %d blocks to end\n", addblock);
+
+				/* find block location to write and write given bytes */
 				int start = (tmp->start * BLOCKSIZE) - 512;
 				printf("[+] Write at location %d beginning at %d\n", start + offset, start);
 				fseek(FSPTR, start+offset, SEEK_SET);
-				fwrite(buf, 1, sizeof(buf), FSPTR);
+				fwrite(buf, 1, size, FSPTR);
+
+				/* update size */
+				update_dir(tmp, i);
+
 			}
 			tmp = tmp->next;
 		}
