@@ -387,7 +387,6 @@ static int myfs_getattr(const char *path, struct stat *stbuf)
 		stbuf->st_mode = S_IFDIR | 0755;
 		return 0;
 	} if(strcmp(path, "/autorun.inf") == 0|| strcmp(path, "/AACS") == 0|| strcmp(path, "/BDSVM") == 0 || strcmp(path, "/BDMV") == 0) {
-		printf("WHY?!?!?!?!\n");
 		return -ENOENT;
 	} if(file_lookup(path, stbuf) == 1) {	//TODO: Breaks looking up some files, fix this!
 		printf("[+] resetting attributes\n");
@@ -464,7 +463,7 @@ static int myfs_read(const char *path, char *buf, size_t size, off_t offset,
 	}
 
 	/* mostly testing stuff here... */
-	printf("[!] READ called\tpath:\t%s\n\t-start: %d\n\t-end: %d\n", path, tmp->start, tmp->end);
+	printf("[!] READ called\tpath:\t%s\n\t-start: %zu\n\t-end: %zu\n", path, tmp->start, tmp->end);
 	if(tmp->info.st_size - offset > size) {
 		start = ((tmp->start - 1) * BLOCKSIZE) + offset;
 		fseek(FSPTR, start, SEEK_SET);
@@ -519,7 +518,7 @@ static int myfs_write(const char *path, char *buf, size_t size, off_t offset, st
 		for(i = 0; i < ENTRIES; i++) {
 			if(strcmp(cpy, tmp->filename) == 0) {
 				printf("[+] %d added. New size %d\n", size, tmp->info.st_size);
-				int start = (tmp->start * BLOCKSIZE) - 512;
+				double start = (tmp->start * BLOCKSIZE) - 512;
 				printf("[+] Write at location %d beginning at %d\n", start + offset, start);
 				fseek(FSPTR, start+offset, SEEK_SET);
 				fwrite(buf, 1, size, FSPTR);
@@ -546,7 +545,7 @@ static int myfs_write(const char *path, char *buf, size_t size, off_t offset, st
 				printf("[+] need to add %d blocks to end\n", addblock);
 
 				/* find block location to write and write given bytes */
-				int start = (tmp->start * BLOCKSIZE) - 512;
+				double start = (tmp->start * BLOCKSIZE) - 512;
 				printf("[+] Write at location %d beginning at %d\n", start + offset, start);
 				fseek(FSPTR, start+offset, SEEK_SET);
 				fwrite(buf, 1, size, FSPTR);
