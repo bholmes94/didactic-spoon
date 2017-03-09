@@ -1,4 +1,4 @@
-#define FUSE_USE_VERSION 26
+#define FUSE_USE_VERSION 29
 
 #include <fuse.h>
 #include <stdio.h>
@@ -576,6 +576,54 @@ static int myfs_truncate(const char *path, off_t offset)
 	return 0;
 }
 
+/*
+ * Function called to delete files. Takes the pathname. Note that this function is not
+ * completely implemented and does everything short of rewriting to the filesystem. It
+ * will calculate new locations, etc though.
+ */
+static int myfs_unlink(const char *path)
+{
+	char cpy[16];
+	struct entry *tmp;
+	int i, blocks;
+	
+	/* copy string & get rid of '/' */
+	strcpy(cpy, path);
+	memmove(cpy, cpy + 1, strlen(cpy));
+
+	/* debugging nonsense */
+	printf("[!] unlink is called %s\n", cpy);
+
+	/* finding the file*/
+	tmp = HEAD;
+	i = 0;
+	while(i < ENTRIES) {
+		if(strcmp(cpy, tmp->filename)) {
+			printf("[!] file to remove found!\n");
+			break;
+		}
+
+		/*
+		 * we want to end here if the file is not in the
+		 * filesystem or else we risk deleting the last 
+		 * file. Check here and return if necessary.
+		 */
+		if(i == ENTRIES - 1) {
+			printf("[!] Last file, checking\n");
+			if(strcmp(cpy, tmp->filename) != 0) {
+				printf("[-] No such file in system\n");
+				return 0;
+			}
+		}
+		tmp = tmp->next;
+		i++;
+	}
+
+	printf("[+] Continuing file removal\n");
+
+	return 0;
+}
+
 static int myfs_chown()
 {
 	return 0;
@@ -594,6 +642,7 @@ static struct fuse_operations myfs_ops = {
 	.read 		= myfs_read,
 	.write		= myfs_write,
 	.create		= myfs_create,
+	.unlink		= myfs_unlink,
 	.truncate 	= myfs_truncate,
 	.chown 		= myfs_chown,
 	.utimens	= myfs_utimens,
