@@ -585,7 +585,8 @@ static int myfs_unlink(const char *path)
 {
 	char cpy[16];
 	struct entry *tmp;
-	int i, blocks;
+	int i;
+	double moveLoc, size;
 	
 	/* copy string & get rid of '/' */
 	strcpy(cpy, path);
@@ -598,7 +599,7 @@ static int myfs_unlink(const char *path)
 	tmp = HEAD;
 	i = 0;
 	while(i < ENTRIES) {
-		if(strcmp(cpy, tmp->filename)) {
+		if(strcmp(cpy, tmp->filename) == 0) {
 			printf("[!] file to remove found!\n");
 			break;
 		}
@@ -614,12 +615,27 @@ static int myfs_unlink(const char *path)
 				printf("[-] No such file in system\n");
 				return 0;
 			}
+		} else {
+			tmp = tmp->next;
+			i++;
+			printf("CRAP\n");
 		}
-		tmp = tmp->next;
-		i++;
 	}
 
 	printf("[+] Continuing file removal\n");
+
+	if(tmp->next != NULL) {
+		/* calculate space displaced and free struct */
+		printf("[!] Location of first block is %d\n[!] Reclaiming %d blocks\n", tmp->start, tmp->end - tmp->start);
+		moveLoc = ((tmp->start - 1) * 512) + 10;
+		printf("[+] Moving all files up to position %lf\n", moveLoc);
+		size = (tmp->next->end - tmp->next->start) + 1;
+		printf("[+] Size of moved file is %f blocks\n[+] New end is %f\n", size, moveLoc + size);
+		
+		/* update structs */
+		tmp->next->end = moveLoc + size;
+		tmp->next->start = moveLoc;
+	}
 
 	return 0;
 }
