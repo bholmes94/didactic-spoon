@@ -463,7 +463,7 @@ static int myfs_read(const char *path, char *buf, size_t size, off_t offset,
 	}
 
 	/* mostly testing stuff here... */
-	printf("[!] READ called\tpath:\t%s\n\t-start: %zu\n\t-end: %zu\n", path, tmp->start, tmp->end);
+	printf("[!] READ called\tpath:\t%s\n\t-start: %f\n\t-end: %f\n", path, tmp->start, tmp->end);
 	if(tmp->info.st_size - offset > size) {
 		start = ((tmp->start - 1) * BLOCKSIZE) + offset;
 		fseek(FSPTR, start, SEEK_SET);
@@ -638,6 +638,11 @@ static int myfs_unlink(const char *path)
 		tmp->next->start = tmp->start;
 		printf("[!] filename\t%s\n\tbegin block\t%f\n\tend block\t%f\n", tmp->next->filename, tmp->next->start, tmp->next->end);
 		tmp = tmp->next;
+
+		/* calculate where data is moved to for next directory */
+		printf("[+] New locations for file data\n\tbegin\t%f\n\tend\t%f\n",
+			(tmp->start - 1) * 512, ((tmp->end - 1) * 512) + tmp->off - 1);
+
 
 		/* change locations of rest of files in dir */
 		while(tmp->next != NULL) {
