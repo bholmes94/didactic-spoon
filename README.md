@@ -9,14 +9,14 @@ There is currently an inefficiency which will soon be fixed on the macOS version
 # Included Files
 Below are the files in the repository along with a brief description of each. It is worth noting that the device locations (i.e. /dev/sda) are hard-coded and will need to be changed accordingly before running. Another unhandled error is when the program is run without sufficient permissions to access the device. You can either run the program as root or change the permissions of the specific device prior to running the program. Otherwise, a segfault will be issued and you will need to manually unmount filesystem.
 
-myfs_linux.c: 
+* myfs_linux.c:
 A program for the Linux version of the filesystem. Slightly different read/ write calls than with the macOS version of FUSE. Deleting almost completely implemented.
 
-myfs_regular.c:
+* myfs_regular.c:
 This program (soon to be renamed) is the macOS version. Still needs to be caught up to the Linux version but this should not be a challenge as most of the code is comepletely portable between the two systems.
 
-fstester.c:
+* fstester.c:
 This program is used to insert data and test functionality of the filesystem without getting FUSE involved. No real bugs in here yet.
 
-WIN_LFFS.c:
+* WIN_LFFS.c:
 Not here yet, will be soon. The Windows version!
