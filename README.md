@@ -4,14 +4,19 @@ This is a collection of files which contain my capstone project. The general ide
 
 There are a few large caveats to take into consideration with this filesystem. First off, the function of this filesystem is to transfer large files (4GB and up) between various systems with minor effort from the user's end. With this in mind, the filesystem relies on contiguous blocks of storage. So this scheme must be maintained, even between deletes (which are being worked on). The problem here is if there is a small file, say 4KB, is inserted followed by a 3GB file, then removed. That entire 3GB file plus any subsequent file, needs to be moved that tiny space to keep the contiguous scheme. This is VERY inefficient. I could ignore these small holes as just not worth the time but they would likely never be filled. 
 
-Another efficiency issue is the way that the program currently handles reads and writes. To make things easier to port to Windows, which reads block-by-block, I have the file only fill the read/ write buffer with 512bytes when the max is substantially more, ~65k bytes by default I believe. In addition to requiring more read and write calls, the way I find the file within those needs work too. The program will search the entire array EVERY time Read() or Write() is called and continue from there. This combined with the small buffer causes much larger than needed transfer times. When things are working comfortably, I will increase the buffer size and use a global pointer to reduce this strain.
+There is currently an inefficiency which will soon be fixed on the macOS version where the program does not utilize the full buffer when performing reads and writes. As a result, more read/ write calls will need to be made in order to complete the file and the transfer times suffer. This is something that has been fixed on the Linux version and will not be present on the Windows version either. A fix is coming shortly for the macOS version.
 
-#Included Files
+# Included Files
+Below are the files in the repository along with a brief description of each. It is worth noting that the device locations (i.e. /dev/sda) are hard-coded and will need to be changed accordingly before running. Another unhandled error is when the program is run without sufficient permissions to access the device. You can either run the program as root or change the permissions of the specific device prior to running the program. Otherwise, a segfault will be issued and you will need to manually unmount filesystem.
+
 myfs_linux.c: 
-This program is being worked on. The way the Read() and Write() calls are slightly different than in the macOS version. So the upload with a working version will be up shortly. There are also more files that are being passed to the Getattr() call which needs to be filtered out as the program thinks a user is adding a new file when they aren't.
+A program for the Linux version of the filesystem. Slightly different read/ write calls than with the macOS version of FUSE. Deleting almost completely implemented.
 
 myfs_regular.c:
-This is the most complete program here. It has reading and writing. Although you will need to be sure to give the user permissions to use the file within the /dev/ directory corresponding to the USB drive to be used. Otherwise a segfault is issued for a permissions error. There is currently no way to remove a file and when you do add a file I have commented out the directory write so it is never written to the directory. Restarting will clear the added entry.
+This program (soon to be renamed) is the macOS version. Still needs to be caught up to the Linux version but this should not be a challenge as most of the code is comepletely portable between the two systems.
 
 fstester.c:
 This program is used to insert data and test functionality of the filesystem without getting FUSE involved. No real bugs in here yet.
+
+WIN_LFFS.c:
+Not here yet, will be soon. The Windows version!
