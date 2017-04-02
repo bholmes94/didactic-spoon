@@ -61,7 +61,7 @@ void create_entry(char *filename, int filesize)
 	if(size%BLOCKSIZE != 0) blocks = size/BLOCKSIZE + 1;
 	else blocks = size/BLOCKSIZE;
 
-	printf("[!] Size of file is\t%d\tblocks needed\t%lf\n", size, blocks);
+	printf("[!] Size of file is\t%d\tblocks needed\t%d\n", size, blocks);
 
 	
 	// writes filename to directory
@@ -103,8 +103,11 @@ void create_entry(char *filename, int filesize)
 			}
 			tmp = tmp->next;
 		}
-	} else { // creating 'dummy' struct
-		printf("NOT IMPLEMENTED\n");
+	} else { // creating 'dummy' struct and reassigning the HEAD
+		tmp = malloc(sizeof(struct entry));
+		HEAD = malloc(sizeof(struct entry));
+		tmp->end = 1;
+		new = HEAD;
 	}
 	// calculate start locations in bytes
 	location = 10 + (ENTRIES * 41);
@@ -123,8 +126,12 @@ void create_entry(char *filename, int filesize)
 
 	/* convert int to strings and assign values to new entry*/
 	new->start = tmp->end+1;
+
+	printf("*** After Start ***\n");
 	new->end = (tmp->end + 1) + (blocks - 1);
 	new->off = size%BLOCKSIZE;
+
+	printf("*** After Assignments ***\n");
 
 	sprintf(start, "%d", tmp->end+1);
 	sprintf(end, "%d", new->end);
@@ -372,7 +379,6 @@ static void init_dir(char *filesystem)
 		printf("[-] number \t%lf\tname\t%s\n", i, print->filename);
 		print = print->next;
 	}
-
 }
 
 /**
@@ -529,7 +535,9 @@ static int myfs_write(const char *path, char *buf, size_t size, off_t offset, st
 		memmove(cpy, cpy + 1, strlen(cpy));
 		create_entry(cpy, size); /* Breaks here now! */
 		printf("New Created! Size: %lld\toffset: %lld\n", size, offset);
+
 		/* going to want to remove this/ find alternative. Inefficient! */
+		tmp = HEAD; // IMPORTANT: Reassigns for when HEAD had to be created as the first file
 		printf("\n\n\nFILENAME\t%s\n\n\n", tmp->filename);
 		for(i = 0; i < ENTRIES; i++) {
 			if(strcmp(cpy, tmp->filename) == 0) {
