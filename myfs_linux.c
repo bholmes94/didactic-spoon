@@ -17,11 +17,12 @@ char block[512];		// array to store first block
 struct entry *HEAD;		// head of array for the entries
 struct entry *ENT; 		// stores location of entry being worked on
 FILE* FSPTR;
+char *filename = "filesys";
 
 /* struct to store each entry and info */
 struct entry {
 	char filename[16];
-	double start, end, off;
+	int start, end, off;
 	struct stat info;
 	struct entry *next;
 };
@@ -39,7 +40,8 @@ struct entry {
  */
 void create_entry(char *filename, int filesize)
 {
-	int location, i, size, blocks, total_size;
+	int location, i, size, total_size;
+	double blocks;
 	struct entry *tmp;
 	struct entry *new;
 	size_t bytes;		// number of bytes read from file
@@ -47,9 +49,11 @@ void create_entry(char *filename, int filesize)
 	char wrbuf[512];	// separate buffer for writing to fs
 	char start[12];		// start block buffer
 	char end[12];		// end block buffer
-	char off[4];		// offset buffer for last block
+	char off[12];		// offset buffer for last block
 
 
+	blocks = 0;
+	location = 0;
 	size = filesize;
 	location = (ENTRIES * 41) + 10;			// calculates start location in dir
 	
@@ -57,7 +61,7 @@ void create_entry(char *filename, int filesize)
 	if(size%BLOCKSIZE != 0) blocks = size/BLOCKSIZE + 1;
 	else blocks = size/BLOCKSIZE;
 
-	printf("[!] Size of file is\t%d\tblocks needed\t%d\n", size, blocks);
+	printf("[!] Size of file is\t%d\tblocks needed\t%lf\n", size, blocks);
 
 	
 	// writes filename to directory
@@ -100,10 +104,8 @@ void create_entry(char *filename, int filesize)
 			tmp = tmp->next;
 		}
 	} else { // creating 'dummy' struct
-		tmp = malloc(sizeof(struct entry));
-		tmp->end = 1;
+		printf("NOT IMPLEMENTED\n");
 	}
-
 	// calculate start locations in bytes
 	location = 10 + (ENTRIES * 41);
 	printf("[+] start write at block %d and location %d\n[+] size of file (in blocks): %d\n"
@@ -119,36 +121,48 @@ void create_entry(char *filename, int filesize)
 	 * 0-511 (512 bytes) in filesystem. Remember this when reading from file! Offset buf can help.
 	 */
 
-
 	/* convert int to strings and assign values to new entry*/
 	new->start = tmp->end+1;
 	new->end = (tmp->end + 1) + (blocks - 1);
 	new->off = size%BLOCKSIZE;
+
 	sprintf(start, "%d", tmp->end+1);
-	sprintf(end, "%d", (tmp->end + 1) + (blocks - 1));
-	sprintf(off, "%d", size%BLOCKSIZE);				/* offset is just the remainder of the size/512 */
+	sprintf(end, "%d", new->end);
+	sprintf(off, "%d", new->off);				/* offset is just the remainder of the size/512 */
 	ENT = new;	/* store for future reference */
 
+		printf("[!] File Info To Write:\n"
+			"\tstart\t%s\n"
+			"\tend\t%s\n"
+			"\toff\t%s\n"
+			,start, end, off);
 
 	/* 
 	 * NOTE: all write functions are to memory, NOT the drive. there is a 
 	 * separate function to flush the directory to the drive.
 	 */
 	
+	printf("*BEGINNING DIRECTORY WRITE*");
 	// writes start block to directory
 	for(i = 0; i < strlen(start) + 1; i++) {
 		block[location + 16 + i] = start[i];
 	}
+
+	printf("\n\tStart Location Writen\n");
 
 	// writes end block to directory
 	for(i = 0; i < strlen(end) + 1; i++) {
 		block[location + 27 + i] = end[i];
 	}
 
+	printf("\n\tEnd Location Writen\n");
+
 	// writes offset to directory
 	for(i = 0; i < strlen(off); i++) {
 		block[location + 38 + i] = off[i];
 	}
+
+	printf("\n\tOffset Amnt Writen\n");
 
 	// update entry count, write to directory
 	ENTRIES++;
@@ -162,8 +176,9 @@ void create_entry(char *filename, int filesize)
 	tmp = HEAD;
 	for(i=0;i < ENTRIES; i++) {
 		printf("- %s\n", tmp->filename);
-		tmp=tmp->next;
+		if(ENTRIES > 1) tmp=tmp->next;
 	}
+
 	// flushes directory and writes to disk
 	fseek(FSPTR, 0, SEEK_SET);
 	fwrite(block, sizeof(block), 1, FSPTR);	/* rewrites the directory block */
@@ -183,7 +198,7 @@ static void update_dir(struct entry *tmp, int index)
 	char off[3];
 	int location, i;
 
-	printf("[+] update dir of %s. Number %d\n", tmp->filename, index);
+	printf("[+] update dir of %lf. Number %d\n", tmp->filename, index);
 	sprintf(end, "%d", tmp->end);
 	sprintf(off, "%d", tmp->off);
 
@@ -265,14 +280,14 @@ static void init_dir(char *filesystem)
 	else ENTRIES = count;
 
 	// print result for debugging
-	printf("Number of files:\t%d\n", count);
+	printf("Number of files:\t%lf\n", count);
 
 	// reads directories, currently printing locations of dirs in the block
 	for(i = 1; i < ENTRIES+1; i++) {
 
 		if(i == 1) {
 			prev = malloc(sizeof(struct entry));
-			printf("[!] Entry %d location\t10\n", i);
+			printf("[!] Entry %lf location\t10\n", i);
 
 			memcpy(filename, &block[10], 16);
 			filename[16] = '\0';
@@ -282,19 +297,19 @@ static void init_dir(char *filesystem)
 			// copy start location from directory
 			memcpy(start, &block[26], 11);
 			start[11] = '\0';
-			printf("[+] begin\t%s|%d\n", start, atoi(start));
+			printf("[+] begin\t%s|%lf\n", start, atoi(start));
 			prev->start = atoi(start);
 
 			// copy end location from directory
 			memcpy(end, &block[37], 11);
 			end[11] = '\0';
-			printf("[+] end\t\t%s|%d\n", end, atoi(end));
+			printf("[+] end\t\t%s|%lf\n", end, atoi(end));
 			prev->end = atoi(end);
 
 			// copy the offset of the last block from mem
 			memcpy(off, &block[48], 3);
 			off[3] = '\0';
-			printf("[+] offset\t%s|%d\n", off, atoi(off));
+			printf("[+] offset\t%s|%lf\n", off, atoi(off));
 			prev->off = atoi(off);
 
 			HEAD = prev;
@@ -311,7 +326,7 @@ static void init_dir(char *filesystem)
 			struct entry *tmp = malloc(sizeof(struct entry));
 
 			begin = 10 + (41*(i-1));		// calculate the location of entry
-			printf("[!] Entry %d location\t%d\n", i, begin);
+			printf("[!] Entry %lf location\t%lf\n", i, begin);
 			
 			// copy filename from dir and into array for struct use
 			memcpy(filename, &block[begin], 16);
@@ -322,13 +337,13 @@ static void init_dir(char *filesystem)
 			// copy start location from directory
 			memcpy(start, &block[begin+16], 11);
 			start[11] = '\0';
-			printf("[+] begin\t%s|%d\n", start, atoi(start));
+			printf("[+] begin\t%s|%lf\n", start, atoi(start));
 			tmp->start = atoi(start);
 
 			// copy end location from directory
 			memcpy(end, &block[begin+27], 11);
 			end[11] = '\0';
-			printf("[+] end\t\t%s|%d\n", end, atoi(end));
+			printf("[+] end\t\t%s|%lf\n", end, atoi(end));
 			tmp->end = atoi(end);
 
 			// copy the offset of the last block from mem
@@ -354,7 +369,7 @@ static void init_dir(char *filesystem)
 
 	struct entry *print = HEAD;
 	for(i=0; i < ENTRIES; i++) {
-		printf("[-] number \t%d\tname\t%s\n", i, print->filename);
+		printf("[-] number \t%lf\tname\t%s\n", i, print->filename);
 		print = print->next;
 	}
 
@@ -376,7 +391,7 @@ static int myfs_getattr(const char *path, struct stat *stbuf)
 {
 	char cpy[16]; 			// buffer for removing first char 
 	memset(stbuf, 0, sizeof(struct stat));
-	printf("[!] GETATTR called\tpath: %s\tname length: %d\n", path, strlen(path));
+	printf("[!] GETATTR called\tpath: %s\tname length: %lf\n", path, strlen(path));
 
 	/* can do this neater in future... stops from breaking */
 	if(strlen(path) > 15) return -ENOENT;
@@ -463,7 +478,7 @@ static int myfs_read(const char *path, char *buf, size_t size, off_t offset,
 	}
 
 	/* mostly testing stuff here... */
-	printf("[!] READ called\tpath:\t%s\n\t-start: %f\n\t-end: %f\n", path, tmp->start, tmp->end);
+	printf("[!] READ called\tpath:\t%s\n\t-start: %lf\n\t-end: %lf\n", path, tmp->start, tmp->end);
 	if(tmp->info.st_size - offset > size) {
 		start = ((tmp->start - 1) * BLOCKSIZE) + offset;
 		fseek(FSPTR, start, SEEK_SET);
@@ -497,7 +512,7 @@ static int myfs_write(const char *path, char *buf, size_t size, off_t offset, st
 {
 	char cpy[16];
 	struct entry *tmp;
-	int i, addblock;
+	double i, addblock;
 	printf("[!] WRITE called on path: %s\tsize: %zu\toffset:%zu\n", path, size, offset);
 	tmp = HEAD;
 	/* 
@@ -512,14 +527,15 @@ static int myfs_write(const char *path, char *buf, size_t size, off_t offset, st
 	if(file_lookup(path, NULL) == 0) {
 		strcpy(cpy, path);
 		memmove(cpy, cpy + 1, strlen(cpy));
-		create_entry(cpy, size);
+		create_entry(cpy, size); /* Breaks here now! */
 		printf("New Created! Size: %lld\toffset: %lld\n", size, offset);
 		/* going to want to remove this/ find alternative. Inefficient! */
+		printf("\n\n\nFILENAME\t%s\n\n\n", tmp->filename);
 		for(i = 0; i < ENTRIES; i++) {
 			if(strcmp(cpy, tmp->filename) == 0) {
-				printf("[+] %d added. New size %d\n", size, tmp->info.st_size);
+				printf("[+] %lf added. New size %lf\n", size, tmp->info.st_size);
 				double start = (tmp->start * BLOCKSIZE) - 512;
-				printf("[+] Write at location %d beginning at %d\n", start + offset, start);
+				printf("[+] Write at location %lf beginning at %lf\n", start + offset, start);
 				fseek(FSPTR, start+offset, SEEK_SET);
 				fwrite(buf, 1, size, FSPTR);
 			}
@@ -534,7 +550,7 @@ static int myfs_write(const char *path, char *buf, size_t size, off_t offset, st
 			/*IMPORTANT!: This needs to update the blocks used by the file*/
 			if(strcmp(cpy, tmp->filename) == 0) {
 				tmp->info.st_size += size;
-				printf("[+] %d added. New size %d\n", size, tmp->info.st_size);
+				printf("[+] %lf added. New size %lf\n", size, tmp->info.st_size);
 				/* check if we need another block added for offset */
 				addblock = size/BLOCKSIZE;
 				if(size % BLOCKSIZE > 0){ 
@@ -542,7 +558,7 @@ static int myfs_write(const char *path, char *buf, size_t size, off_t offset, st
 					tmp->off = size%BLOCKSIZE;
 				}
 				tmp->end += addblock;
-				printf("[+] need to add %d blocks to end\n", addblock);
+				printf("[+] need to add %lf blocks to end\n", addblock);
 
 				/* find block location to write and write given bytes */
 				double start = (tmp->start * BLOCKSIZE) - 512;
@@ -594,6 +610,7 @@ static int myfs_unlink(const char *path)
 
 	/* debugging nonsense */
 	printf("[!] unlink is called %s\n", cpy);
+	if(ENTRIES == 0) return 0;
 
 	/* finding the file*/
 	tmp = HEAD;
@@ -686,7 +703,7 @@ static struct fuse_operations myfs_ops = {
 
 int main(int argc, char *argv[])
 {
-	FSPTR = fopen("filesys", "r+");
-	init_dir("filesys");
+	FSPTR = fopen(filename, "r+");
+	init_dir(filename);
 	return fuse_main(argc, argv, &myfs_ops, NULL);	// FUSE taking over here
 }
