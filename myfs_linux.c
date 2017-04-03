@@ -444,7 +444,6 @@ static int myfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		// loop through the files in dir in memory
 		int i;
 		for(i = 0; i < ENTRIES; i++) {
-			printf("What's going on?\n");
 			filler(buf, tmp->filename, NULL, 0);
 			tmp = tmp->next;
 		}
