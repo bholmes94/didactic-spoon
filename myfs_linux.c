@@ -90,8 +90,8 @@ void create_entry(char *filename, int filesize)
 	 * ved space. The subsequent calculations will be based on this.
 	 */
 
-	tmp = HEAD;
 	if(ENTRIES > 0) {
+		tmp = HEAD;
 		for(i = 0; i < ENTRIES; i++) {
 			if(i == ENTRIES - 1) {
 				printf("[!] %s is the last file in the system. Ends at block %d\n", tmp->filename, tmp->end);
@@ -107,6 +107,9 @@ void create_entry(char *filename, int filesize)
 		tmp = malloc(sizeof(struct entry));
 		HEAD = malloc(sizeof(struct entry));
 		tmp->end = 1;
+		memcpy(HEAD->filename, filename, 16);
+		HEAD->info.st_size = size;
+		HEAD->next = NULL;
 		new = HEAD;
 	}
 	// calculate start locations in bytes
@@ -441,6 +444,7 @@ static int myfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		// loop through the files in dir in memory
 		int i;
 		for(i = 0; i < ENTRIES; i++) {
+			printf("What's going on?\n");
 			filler(buf, tmp->filename, NULL, 0);
 			tmp = tmp->next;
 		}
