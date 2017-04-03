@@ -646,7 +646,6 @@ static int myfs_unlink(const char *path)
 		} else {
 			tmp = tmp->next;
 			i++;
-			printf("CRAP\n");
 		}
 	}
 
@@ -678,6 +677,15 @@ static int myfs_unlink(const char *path)
 			tmp->next->start = tmp->end + 1; 
 			tmp->next->end = tmp->next->start + diff;
 			printf("[!] Calculating Next\n\tbegin:\t%f\n\tend:\t%f\n", tmp->next->start, tmp->next->end);
+
+			/*
+			 * TODO: Need to create a buffer of the size of the file if the 
+			 * file is < 1GB and write to the right location. If the file is
+			 * larger than 1GB (Most Likely), then use a function to loop 
+			 * until the remaining pieces to move are less than the buffer
+			 * size.
+			 */
+
 			tmp = tmp->next;
 		}
 	} else {
