@@ -23,3 +23,4 @@ Coming soon. This is the Windows version which utilizes a different library name
 
 # Installation
 ## Linux
+In order to run the application on Linux right now, you will need to have FUSE installed. For testing I have been using version 2.9.7. Additionally, you will need to know the name of the device you are using to transfer files within the /dev/ folder. This is something I plan to replace with something else soon. Once you have these two and the device filename is placed in the filesystem variable, you can compile the program using gcc -Wall `pkd`
