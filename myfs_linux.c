@@ -26,7 +26,7 @@ struct entry {
 	struct stat info;
 	struct entry *next;
 };
-
+	
 /*
  * Function called to create a new entry inside of the directory which is already read
  * into memory and flush it to the drive. Also writes data to specified location. Right
@@ -376,12 +376,6 @@ static void init_dir(char *filesystem)
 	}
 
 	fclose(dir);	// close directory to complete
-
-	struct entry *print = HEAD;
-	for(i=0; i < ENTRIES; i++) {
-		printf("[-] number \t%lf\tname\t%s\n", i, print->filename);
-		print = print->next;
-	}
 }
 
 /**
@@ -412,7 +406,7 @@ static int myfs_getattr(const char *path, struct stat *stbuf)
 		return 0;
 	} if(strcmp(path, "/autorun.inf") == 0|| strcmp(path, "/AACS") == 0|| strcmp(path, "/BDSVM") == 0 || strcmp(path, "/BDMV") == 0) {
 		return -ENOENT;
-	} if(file_lookup(path, stbuf) == 1) {	//TODO: Breaks looking up some files, fix this!
+	} if(file_lookup(path, stbuf) == 1) {
 		printf("[+] resetting attributes\n");
 		stbuf->st_mode = S_IFREG | 0777;		// leaving this for now, will get from stbuf in future 
 		stbuf->st_nlink = 1;
@@ -603,17 +597,143 @@ static int myfs_truncate(const char *path, off_t offset)
 	return 0;
 }
 
+
+/*
+ * Function designed to deal with the removal of files from the filesystem. It
+ * will write zeros to the location and move up all subsequent values to new 
+ * locations to maintain contiguous storage.
+ */
+static int removeFileData(struct entry *ent)
+{
+	struct entry *tmp;
+	struct entry *prev;
+	int blocksInFile;
+	double bufferSize;
+	tmp = ent;
+	blocksInFile = (tmp->end - tmp->start) + 1;
+
+	printf("[!] File removal %s of %d block(s)\n", tmp->filename, blocksInFile);
+
+	/* only dealing with small files less than 1GB for now */
+	if(blocksInFile >= 1953125) return 1;
+
+	/* TODO: write 0's to location, might only matter if last... */
+	/* grab next in line if exists */
+	prev = tmp;
+	tmp = tmp->next;
+
+	while(tmp != NULL) {
+		bufferSize = blocksInFile - 1 + tmp->off;
+		printf("\tbuffer of size %lf bytes created.\n", bufferSize);
+		char *buffer = malloc(bufferSize);
+		/* read and write stuff here */
+		printf("\tlocation to write %d\n", (prev->end - 1) * 512);
+		free(buffer);
+		prev = tmp;
+		tmp = tmp->next;
+	}
+
+	return 0;
+}
+
+static int rearrangeDirectory(struct entry *tmp, char *cpy)
+{
+	double newDataBegin, newDataEnd, size;			// for larger locations and sizes
+	struct entry *prev;
+	struct entry *current;
+
+	printf("[!] rearrangeDirectory called\n");
+	
+	/* move rest of system up if there are others after the deleted entry */
+	if(tmp->next != NULL) {
+		
+		/* calculate space displaced and free struct */
+		size = (tmp->next->end - tmp->next->start) + 1;
+
+		/* calculate new data locations */
+		tmp->next->end = tmp->start + size - 1;   // sub one b/c it's inclusive
+		tmp->next->start = tmp->start;
+
+		printf("[!] filename\t%s\n\tbegin block\t%d\n\tend block\t%d\n", tmp->next->filename, tmp->next->start, tmp->next->end);
+		
+		/* movoing on to rest of files */
+		tmp = tmp->next;
+
+		/* calculate where data is moved to for next directory */
+		newDataBegin = (tmp->start - 1) * 512;
+		newDataEnd = ((tmp->end - 1) * 512) + tmp->off - 1;
+		printf("[+] New locations for file data\n\tbegin\t%lf\n\tend\t%lf\n", newDataBegin, newDataEnd);
+
+
+		/* change locations of rest of files in dir */
+		while(tmp->next != NULL) {
+			/* calculating new block locations */
+			double diff = tmp->next->end - tmp->next->start;
+			tmp->next->start = tmp->end + 1; 
+			tmp->next->end = tmp->next->start + diff;
+			printf("[!] Calculating Locations for %s\n\tbegin:\t%d\n\tend:\t%d\n"
+				, tmp->next->filename, tmp->next->start, tmp->next->end);
+
+			/* calculates new data write locations */
+			newDataBegin = (tmp->next->start - 1) * 512;
+			newDataEnd = ((tmp->next->end - 1) * 512) + tmp->next->off - 1;
+			printf("[+] New locations for file data\n\tbegin\t%lf\n\tend\t%lf\n", newDataBegin, newDataEnd);
+			
+			/*
+			 * TODO: Need to create a buffer of the size of the file if the 
+			 * file is < 1GB and write to the right location. If the file is
+			 * larger than 1GB (Most Likely), then use a function to loop 
+			 * until the remaining pieces to move are less than the buffer
+			 * size.
+			 */
+
+			tmp = tmp->next;
+		}
+
+		/* re-arranging the linked list structure */
+		prev = NULL;
+		current = HEAD;
+		while(current->next != NULL) {
+			if(strcmp(cpy, current->filename) == 0 && prev == NULL) {
+				HEAD = current->next;
+				break;
+			}
+			else if(strcmp(cpy, current->filename) == 0 && prev != NULL) {
+				printf("[+] Changing File Pointer\n");
+				prev->next = current->next;
+				break;
+			} else {
+				prev = current;
+				current = current->next;
+			}
+		}
+
+	} else {
+		/* deals with the case where last added is removed */
+		printf("[!] The last entry is the one removed\n");
+		ENTRIES--;
+		return 0;
+	}
+
+	ENTRIES--;
+	return 0;
+}
+
 /*
  * Function called to delete files. Takes the pathname. Note that this function is not
  * completely implemented and does everything short of rewriting to the filesystem. It
  * will calculate new locations, etc though.
+ * 
+ * Note also that we need doubles for the begin, end, and size as the index into the 
+ * filesystem will most likely be at a location greater than ~2GB and any file could
+ * be greater than 4GB.
  */
 static int myfs_unlink(const char *path)
 {
-	char cpy[16];
-	struct entry *tmp;
-	int i;
-	double moveLoc, size;
+	char cpy[16];									// Buffer for conversions 
+	struct entry *tmp;								// Pointer for finding struct in list
+	struct entry *prev;								// Pointer used for rearranging list
+	int i;											// int for loops
 	
 	/* copy string & get rid of '/' */
 	strcpy(cpy, path);
@@ -621,7 +741,19 @@ static int myfs_unlink(const char *path)
 
 	/* debugging nonsense */
 	printf("[!] unlink is called %s\n", cpy);
+
+	/* if there are no entries, we don't have anything to remove */
 	if(ENTRIES == 0) return 0;
+
+	/* if the file is the first, just remove and rearrange here */
+	if(strcmp(cpy, HEAD->filename) == 0) {
+		printf("[+] first file is being removed\n");
+
+		/* removes file and moves data up, then updates directory */
+		removeFileData(HEAD);
+		rearrangeDirectory(HEAD, cpy);
+		return 0;
+	}
 
 	/* finding the file*/
 	tmp = HEAD;
@@ -650,48 +782,7 @@ static int myfs_unlink(const char *path)
 	}
 
 	printf("[+] Continuing file removal\n");
-
-	/* move rest of system up if there are others after the deleted entry */
-	if(tmp->next != NULL) {
-		/* calculate space displaced and free struct */
-		//printf("[!] Location of first block is %d\n[!] Reclaiming %d blocks\n", tmp->start, tmp->end - tmp->start);
-		//moveLoc = ((tmp->start - 1) * 512) + 10;
-		//printf("[+] Moving all files up to position %lf\n", moveLoc);
-		size = (tmp->next->end - tmp->next->start) + 1;
-		//printf("[+] Size of moved file is %f blocks\n[+] New end is %f\n", size, tmp->start + size - 1);
-		
-		/* update structs */
-		tmp->next->end = tmp->start + size - 1;   // sub one b/c it's inclusive
-		tmp->next->start = tmp->start;
-		printf("[!] filename\t%s\n\tbegin block\t%f\n\tend block\t%f\n", tmp->next->filename, tmp->next->start, tmp->next->end);
-		tmp = tmp->next;
-
-		/* calculate where data is moved to for next directory */
-		printf("[+] New locations for file data\n\tbegin\t%f\n\tend\t%f\n",
-			(tmp->start - 1) * 512, ((tmp->end - 1) * 512) + tmp->off - 1);
-
-
-		/* change locations of rest of files in dir */
-		while(tmp->next != NULL) {
-			double diff = tmp->next->end - tmp->next->start;
-			tmp->next->start = tmp->end + 1; 
-			tmp->next->end = tmp->next->start + diff;
-			printf("[!] Calculating Next\n\tbegin:\t%f\n\tend:\t%f\n", tmp->next->start, tmp->next->end);
-
-			/*
-			 * TODO: Need to create a buffer of the size of the file if the 
-			 * file is < 1GB and write to the right location. If the file is
-			 * larger than 1GB (Most Likely), then use a function to loop 
-			 * until the remaining pieces to move are less than the buffer
-			 * size.
-			 */
-
-			tmp = tmp->next;
-		}
-	} else {
-		/* deals with the case wehre last added is removed */
-		printf("[!] The last entry is the one removed\n");
-	}
+	rearrangeDirectory(tmp, cpy);
 
 	return 0;
 }
