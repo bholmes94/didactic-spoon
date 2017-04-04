@@ -23,4 +23,11 @@ Coming soon. This is the Windows version which utilizes a different library name
 
 # Installation
 ## Linux
-In order to run the application on Linux right now, you will need to have FUSE installed. For testing I have been using version 2.9.7. Additionally, you will need to know the name of the device you are using to transfer files within the /dev/ folder. This is something I plan to replace with something else soon. Once you have these two and the device filename is placed in the filesystem variable, you can compile the program using gcc -Wall ``pkd``
+In order to run the application on Linux right now, you will need to have FUSE installed. For testing I have been using version 2.9.7. Additionally, you will need to know the name of the device you are using to transfer files within the /dev/ folder. This is something I plan to replace with something else soon. Once you have these two and the device filename is placed in the filesystem variable, you can compile the program using `gcc -Wall myfs_linux.c 'pkg-config fuse --cflags --libs' -o myfs_linux`. Running the program follows the template of: `./myfs_linux -s [mount folder]`. There are other arguments you can pass which are fed to FUSE such as `-d` for debugging 
+or `-f` to run the application in the foreground. The `-s` argument is to run this in a single thread, which has been working fine. I have not tested it without this argument so far but feel free to do so.
+
+## macOS
+Coming soon.
+
+## Windows
+Coming soon.
