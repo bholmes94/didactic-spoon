@@ -21,5 +21,5 @@ This program is used to insert data and test functionality of the filesystem wit
 * WIN_LFFS.c:
 Coming soon. This is the Windows version which utilizes a different library named Dokany. Most code is portable as well with some minor tweaking to deal with the differing system calls.
 
-#Installation
-##Linux
+# Installation
+## Linux
