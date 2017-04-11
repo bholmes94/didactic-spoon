@@ -30,4 +30,4 @@ or `-f` to run the application in the foreground. The `-s` argument is to run th
 Coming soon.
 
 ## Windows
-The first working version of the Windows filesystem is now up [windows version](https://github.com/bholmes94/WinLFFS "here"). You will need to visit the Dokan page and download the installer which should give you the files needed to run and test this program. More details coming soon.
+The first working version of the Windows filesystem is now up [windows version](https://github.com/bholmes94/WinLFFS "here"). You will need to visit the Dokan page and download the installer which should give you the files needed to run and test this program. More details coming soon. Note that I have been testing on an up to date Windows 10 Pro operating system. I have not had a chance to test on other versions. This program also does everything but actually write to the USB device. I have been holding off to ensure the calculations from the other programs on Linux and macOS work properly. This should be done very soon.
