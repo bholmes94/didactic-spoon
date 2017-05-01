@@ -17,7 +17,7 @@ char block[512];		// array to store first block
 struct entry *HEAD;		// head of array for the entries
 struct entry *ENT; 		// stores location of entry being worked on
 FILE* FSPTR;
-char *filename = "/dev/sdb";
+char *filename = "/dev/sdb";	//drive location
 
 /* struct to store each entry and info */
 struct entry {
