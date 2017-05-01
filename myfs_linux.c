@@ -17,7 +17,7 @@ char block[512];		// array to store first block
 struct entry *HEAD;		// head of array for the entries
 struct entry *ENT; 		// stores location of entry being worked on
 FILE* FSPTR;
-char *filename = "filesys";
+char *filename = "/dev/sdb";
 
 /* struct to store each entry and info */
 struct entry {
@@ -25,6 +25,7 @@ struct entry {
 	int start, end, off;
 	struct stat info;
 	struct entry *next;
+	int number;
 };
 	
 /*
@@ -298,6 +299,7 @@ static void init_dir(char *filesystem)
 		if(i == 1) {
 			prev = malloc(sizeof(struct entry));
 			printf("[!] Entry %lf location\t10\n", i);
+			prev->number = i;
 
 			memcpy(filename, &block[10], 16);
 			filename[16] = '\0';
@@ -337,7 +339,8 @@ static void init_dir(char *filesystem)
 
 			begin = 10 + (41*(i-1));		// calculate the location of entry
 			printf("[!] Entry %lf location\t%lf\n", i, begin);
-			
+			tmp->number = i;
+
 			// copy filename from dir and into array for struct use
 			memcpy(filename, &block[begin], 16);
 			filename[16] = '\0';
@@ -373,6 +376,12 @@ static void init_dir(char *filesystem)
 			prev->next = tmp;
 			prev = tmp;
 		}
+	}
+
+	printf("******************\n");
+	// debugging print directory
+	for(i = 10; i < BLOCKSIZE; i++) {
+		printf("%c ", block[i]);
 	}
 
 	fclose(dir);	// close directory to complete
@@ -603,119 +612,66 @@ static int myfs_truncate(const char *path, off_t offset)
  * will write zeros to the location and move up all subsequent values to new 
  * locations to maintain contiguous storage.
  */
-static int removeFileData(struct entry *ent)
+static int CleanupFileData(struct entry *Next, struct entry *Prev)
 {
-	struct entry *tmp;
-	struct entry *prev;
-	int blocksInFile;
-	double bufferSize;
-	tmp = ent;
-	blocksInFile = (tmp->end - tmp->start) + 1;
+	char *Data;							/* buffer for transfer piece by piece */
+	double Offset = 512;			/* 500MB buffer for faster moves */
+	double loop;						/* calculates loops to move all data */
+	double Location;					/* location in data to move to */
+	double FileSize;
 
-	printf("[!] File removal %s of %d block(s)\n", tmp->filename, blocksInFile);
+	printf("[!] File to move %s\n", Next->filename);
 
-	/* only dealing with small files less than 1GB for now */
-	if(blocksInFile >= 1953125) return 1;
-
-	/* TODO: write 0's to location, might only matter if last... */
-	/* grab next in line if exists */
-	prev = tmp;
-	tmp = tmp->next;
-
-	while(tmp != NULL) {
-		bufferSize = blocksInFile - 1 + tmp->off;
-		printf("\tbuffer of size %lf bytes created.\n", bufferSize);
-		char *buffer = malloc(bufferSize);
-		/* read and write stuff here */
-		printf("\tlocation to write %d\n", (prev->end - 1) * 512);
-		free(buffer);
-		prev = tmp;
-		tmp = tmp->next;
+	if (((Next->end - Next->start) + 1) < 2) {
+		printf("File small enough for one buffer\n");
 	}
+	else {
+		printf("[+] Greater than 500MB, have to loop and use large buffer\n");
+		Data = malloc(512);		/* malloc space */
+		loop = (Next->end - Next->start) + 1;
+		int i;
+		for (i = 0; i < loop; i++) {
 
-	return 0;
+		}
+	}
+return 0;
 }
 
-static int rearrangeDirectory(struct entry *tmp, char *cpy)
+static int CleanupDirectory(struct entry *Move)
 {
-	double newDataBegin, newDataEnd, size;			// for larger locations and sizes
-	struct entry *prev;
-	struct entry *current;
+	// http://stackoverflow.com/questions/190229/where-is-the-itoa-function-in-linux for sprintf
+	int location, i;
+	char buf[11];
 
-	printf("[!] rearrangeDirectory called\n");
+	location = 10 + ((Move->number -1)* 41);
+
+	printf("[!] rearrangeDirectory called on %s at location %d\n", Move->filename,Move->number);
 	
-	/* move rest of system up if there are others after the deleted entry */
-	if(tmp->next != NULL) {
-		
-		/* calculate space displaced and free struct */
-		size = (tmp->next->end - tmp->next->start) + 1;
+	/* clear buffer */
+	memset(&buf, '\0', sizeof(buf));
+	/* migrate directory, clear old entry */
+	for (i = 0; i < 41; i++) block[location + i] = block[location + 41 +i];
+	/* still must update start and end locations */
+	sprintf(buf, "%d", Move->start);
+	for (i = 0; i < 11; i++) block[location + 16 + i] = buf[i];
+	memset(&buf, '\0', sizeof(buf));
+	sprintf(buf, "%d", Move->end);
+	for (i = 0; i < 11; i++) block[location + 27 + i] = buf[i];
 
-		/* calculate new data locations */
-		tmp->next->end = tmp->start + size - 1;   // sub one b/c it's inclusive
-		tmp->next->start = tmp->start;
+	/* debugging. prints out what it will be replacing */
+	for (i = 0; i < 41; i++) fprintf(stderr, "%c ", block[location + i]);
+	printf("\n");
+	/* prints info that needs to be moved */
+	for (i = 0; i < 41; i++) fprintf(stderr, "%c ", block[location + 41 + i]);
 
-		printf("[!] filename\t%s\n\tbegin block\t%d\n\tend block\t%d\n", tmp->next->filename, tmp->next->start, tmp->next->end);
-		
-		/* movoing on to rest of files */
-		tmp = tmp->next;
-
-		/* calculate where data is moved to for next directory */
-		newDataBegin = (tmp->start - 1) * 512;
-		newDataEnd = ((tmp->end - 1) * 512) + tmp->off - 1;
-		printf("[+] New locations for file data\n\tbegin\t%lf\n\tend\t%lf\n", newDataBegin, newDataEnd);
-
-
-		/* change locations of rest of files in dir */
-		while(tmp->next != NULL) {
-			/* calculating new block locations */
-			double diff = tmp->next->end - tmp->next->start;
-			tmp->next->start = tmp->end + 1; 
-			tmp->next->end = tmp->next->start + diff;
-			printf("[!] Calculating Locations for %s\n\tbegin:\t%d\n\tend:\t%d\n"
-				, tmp->next->filename, tmp->next->start, tmp->next->end);
-
-			/* calculates new data write locations */
-			newDataBegin = (tmp->next->start - 1) * 512;
-			newDataEnd = ((tmp->next->end - 1) * 512) + tmp->next->off - 1;
-			printf("[+] New locations for file data\n\tbegin\t%lf\n\tend\t%lf\n", newDataBegin, newDataEnd);
-			
-			/*
-			 * TODO: Need to create a buffer of the size of the file if the 
-			 * file is < 1GB and write to the right location. If the file is
-			 * larger than 1GB (Most Likely), then use a function to loop 
-			 * until the remaining pieces to move are less than the buffer
-			 * size.
-			 */
-
-			tmp = tmp->next;
-		}
-
-		/* re-arranging the linked list structure */
-		prev = NULL;
-		current = HEAD;
-		while(current->next != NULL) {
-			if(strcmp(cpy, current->filename) == 0 && prev == NULL) {
-				HEAD = current->next;
-				break;
-			}
-			else if(strcmp(cpy, current->filename) == 0 && prev != NULL) {
-				printf("[+] Changing File Pointer\n");
-				prev->next = current->next;
-				break;
-			} else {
-				prev = current;
-				current = current->next;
-			}
-		}
-
-	} else {
-		/* deals with the case where last added is removed */
-		printf("[!] The last entry is the one removed\n");
-		ENTRIES--;
-		return 0;
+	for (i = 0; i < 41; i++) block[location + 41 + i] = '\0';
+	
+	printf("\n******************\n");
+	// debugging print directory
+	for(i = 10; i < BLOCKSIZE; i++) {
+		printf("%c ", block[i]);
 	}
 
-	ENTRIES--;
 	return 0;
 }
 
@@ -733,56 +689,75 @@ static int myfs_unlink(const char *path)
 	char cpy[16];									// Buffer for conversions 
 	struct entry *tmp;								// Pointer for finding struct in list
 	struct entry *prev;								// Pointer used for rearranging list
+	struct entry *next;
 	int i;											// int for loops
 	
 	/* copy string & get rid of '/' */
 	strcpy(cpy, path);
 	memmove(cpy, cpy + 1, strlen(cpy));
+	prev == NULL;
 
-	/* debugging nonsense */
+	/* debugging output */
 	printf("[!] unlink is called %s\n", cpy);
 
-	/* if there are no entries, we don't have anything to remove */
-	if(ENTRIES == 0) return 0;
-
-	/* if the file is the first, just remove and rearrange here */
-	if(strcmp(cpy, HEAD->filename) == 0) {
-		printf("[+] first file is being removed\n");
-
-		/* removes file and moves data up, then updates directory */
-		removeFileData(HEAD);
-		rearrangeDirectory(HEAD, cpy);
-		return 0;
-	}
-
-	/* finding the file*/
+	/* search for file */
 	tmp = HEAD;
-	i = 0;
-	while(i < ENTRIES) {
-		if(strcmp(cpy, tmp->filename) == 0) {
-			printf("[!] file to remove found!\n");
-			break;
-		}
-
-		/*
-		 * we want to end here if the file is not in the
-		 * filesystem or else we risk deleting the last 
-		 * file. Check here and return if necessary.
-		 */
-		if(i == ENTRIES - 1) {
-			printf("[!] Last file, checking\n");
-			if(strcmp(cpy, tmp->filename) != 0) {
-				printf("[-] No such file in system\n");
-				return 0;
-			}
-		} else {
-			tmp = tmp->next;
-			i++;
-		}
+	for(i = 0; i < ENTRIES; i++) {
+		if(strcmp(cpy, tmp->filename) == 0) break;
+		tmp = tmp->next;
+		prev = tmp;
 	}
 
-	printf("[+] Continuing file removal\n");
-	rearrangeDirectory(tmp, cpy);
+	if(tmp->filename == NULL) return 0;
+
+	printf("[!] Found file to delete %s\n", tmp->filename);
+	/* zero directory entry */
+	//for(i = 0; i < 41; i++) block[10 + ((tmp->number) * 41) + i] = '\0';
+
+	/* deals with the case that it is the last item */
+	if(tmp->next == NULL) {
+		printf("[+] File is last file in system\n");
+		prev->next = NULL;
+	} else {
+		/* check if file is the first, this will be handled differently */		
+		if(i == 0) {
+			printf("[+] first file removed\n");
+			return 0;
+		}
+
+		CleanupFileData(next, prev);
+		prev->next = tmp->next;
+		next = tmp->next;
+		/* recalculate locations */
+		next->end = tmp->start + ((next->end - next->start));
+		next->start = tmp->start;
+		next->number -= 1;
+
+		CleanupDirectory(next);
+		/* otherwise, continue to move file */
+		prev = next;
+		next = next->next;
+		while(next != NULL) {
+			printf("[!] Filling gap between %s and %s\n", prev->filename, next->filename);
+			CleanupFileData(next, prev);
+			/* recalculate locations */
+			next->end = prev->end + 1 + (next->end - next->start);
+			next->start = prev->end + 1;
+			next->number -= 1;
+	
+			printf("[+] %s new start %d new end %d\n", next->filename, next->start, next->end);
+			
+			/* clean the dirextory and move on to next */
+			CleanupDirectory(next);
+			prev = next;
+			next = next->next;
+		}
+	}
+	ENTRIES--;
+	block[0] = ENTRIES + '0';
+	fseek(FSPTR, 0, SEEK_SET);
+	//fwrite(block, 1, 512, FSPTR);
+
 
 	return 0;
 }
