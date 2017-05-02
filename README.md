@@ -10,10 +10,10 @@ There is currently an inefficiency which will soon be fixed on the macOS version
 Below are the files in the repository along with a brief description of each. It is worth noting that the device locations (i.e. /dev/sda) are hard-coded and will need to be changed accordingly before re-compiling and running. This is something that will be changed to a command line argument as re-compiling every single time a device changes is unnecessary. Another unhandled error is when the program is run without sufficient permissions to access the device. You can either run the program as root or change the permissions of the specific device prior to running the program. Otherwise, a segfault will be issued and you will need to manually unmount filesystem by using the following command `fusermount -u [mount path]`. After that you can re-run the program.
 
 * myfs_linux.c:
-A program for the Linux version of the filesystem. Slightly different read/ write calls than with the macOS version of FUSE. Deleting almost completely implemented. Almost complete.
+A program for the Linux version of the filesystem. Instructions to compile and install are included below in the Installation section. This program relies on FUSE which allows the user to implement the included callbacks inside of this file. The buffer that is going to be used for the function re-arranging the directory will be small at first as it is not expected the user will be moving around files often, as they are quite large and wiping the drive would be easier. A fix should be coming to make use of a larger buffer.
 
-* myfs_regular.c:
-This program (soon to be renamed) is the macOS version. Still needs to be caught up to the Linux version but this should not be a challenge as most of the code is comepletely portable between the two systems. Will be complete soon.
+* lffs_mac.c:
+The macOS version of my filesystem. There are a few strange bugs that I had not run into before that will be addressed. This right now is essentially the Linux version with an explicit path to the fuse.h file that is installed with osxfuse. Documentation and info on this can be found [osxfuse]("https://osxfuse.github.io" "here"). It essentially allows programs and callbacks designed for FUSE to work with macOS as well. One of the primary issues here is that dragging and dropping a file into the drive doesn't seem to work. However using the `cp [filename] <mounted folder>` works without issue. Looking into this currently. This is using osxfuse 3.5.8. 
 
 * fstester.c:
 This program is used to insert data and test functionality of the filesystem without getting FUSE involved. No real bugs in here yet.
@@ -24,7 +24,8 @@ In order to run the application on Linux right now, you will need to have FUSE i
 or `-f` to run the application in the foreground. The `-s` argument is to run this in a single thread, which has been working fine. I have not tested it without this argument so far but feel free to do so.
 
 ## macOS
-Coming soon.
+To install and run the program on macOS, you will first need to have a version of [osxfuse]("https://osxfuse.github.io" "osxfuse") installed. Once that is installed, you can compile the program using `gcc lffs_mac.c -I /usr/local/include/osxfuse/fuse.h -D_FILE_OFFSET_BITS=64 -v -L /usr/local/lib -losxfuse -o lffs_mac`. Note that the paths might have to be changed to suite the install locations. As far as I have read, these locations are default though. The compilation flags were helped by a few sites, I'll track them down and link them here.
+
 
 ## Windows
 The first working version of the Windows filesystem is now up [windows version](https://github.com/bholmes94/WinLFFS "here"). You will need to visit the Dokany page and download the installer which should give you the files needed to run and test this program. This is availible [here](https://github.com/dokan-dev/dokany/wiki/Installation "here"). Note that I have been testing on an up to date Windows 10 Pro operating system. I have not had a chance to test on other versions. This program also does everything but actually write to the USB device. I have been holding off to ensure the calculations from the other programs on Linux and macOS work properly. This should be done very soon.
